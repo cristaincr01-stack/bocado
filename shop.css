@@ -1,0 +1,190 @@
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  margin-bottom: 8px;
+  color: var(--turq);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.notice {
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  background: #fff1d1;
+  color: #7a5200;
+  font-weight: 600;
+}
+
+.product {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.product .info {
+  min-width: 0;
+}
+
+.product .price {
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.qty button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--turq);
+  background: #fff;
+  color: var(--turq);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.qty button.add {
+  background: var(--turq);
+  color: #fff;
+}
+
+.qty button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.qty b {
+  min-width: 18px;
+  text-align: center;
+}
+
+.cartbar {
+  position: sticky;
+  bottom: 14px;
+  margin-top: 18px;
+}
+
+.cartbar .btn {
+  justify-content: space-between;
+  box-shadow: 0 8px 20px rgba(8, 67, 74, 0.28);
+}
+
+.sum-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.sum-line.total {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 12px;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.items-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--ink);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--turq);
+}
+
+.order-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.order-actions .btn {
+  width: auto;
+  flex: 1 1 auto;
+}
+
+.steps {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.step .pip {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.step.done {
+  color: var(--ink);
+}
+
+.step.done .pip {
+  background: var(--turq);
+  border-color: var(--turq);
+}
+
+.step.now {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.step.now .pip {
+  background: var(--mango);
+  border-color: var(--mango);
+  box-shadow: 0 0 0 5px rgba(255, 182, 39, 0.3);
+}
+
+.badge.agotado {
+  background: #fde8ec;
+  color: #8f1f36;
+}
+
+.badge.propio {
+  background: #d9f2e3;
+  color: #17603a;
+}
+
+.cancelled {
+  color: #8f1f36;
+  font-weight: 700;
+  margin-top: 10px;
+}

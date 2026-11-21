@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { MapPin } from 'lucide-react'
 import { supabase } from './lib.js'
+import { CustomerApp } from './Shop.jsx'
+import { BusinessDashboard, CourierWork } from './Work.jsx'
 
 const VERIF = { pendiente: 'En revisión', aprobado: 'Verificado', rechazado: 'Rechazado' }
 const TIER_LABEL = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
@@ -42,49 +44,7 @@ function getPosition() {
 /* ------------------------------------------------------------------ */
 
 export function CustomerHome() {
-  const [items, setItems] = useState(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    supabase
-      .from('businesses')
-      .select('id, name, category, address, is_open')
-      .eq('verification_status', 'aprobado')
-      .order('name')
-      .then(({ data, error: err }) => {
-        if (err) setError('No pudimos cargar los negocios. Inténtalo de nuevo.')
-        else setItems(data)
-      })
-  }, [])
-
-  return (
-    <>
-      <h3 className="section-title" style={{ marginTop: 0 }}>
-        Negocios verificados
-      </h3>
-      {error && <div className="msg error">{error}</div>}
-      {items === null && !error && <p>Cargando...</p>}
-      {items && items.length === 0 && (
-        <div className="empty">
-          <strong>Aún no hay negocios en tu zona</strong>
-          Estamos sumando los primeros. Vuelve pronto.
-        </div>
-      )}
-      <div className="list">
-        {(items || []).map((b) => (
-          <div className="card" key={b.id}>
-            <div className="row">
-              <h3>{b.name}</h3>
-              <span className={`badge ${b.is_open ? 'aprobado' : ''}`}>
-                {b.is_open ? 'Abierto' : 'Cerrado'}
-              </span>
-            </div>
-            <p className="meta">{[b.category, b.address].filter(Boolean).join(' - ')}</p>
-          </div>
-        ))}
-      </div>
-    </>
-  )
+  return <CustomerApp />
 }
 
 /* ------------------------------------------------------------------ */
@@ -235,21 +195,7 @@ export function BusinessPanel({ profile }) {
         </div>
       )}
       {business.verification_status === 'aprobado' && (
-        <>
-          <button
-            className="switch"
-            role="switch"
-            aria-checked={business.is_open}
-            onClick={toggleOpen}
-          >
-            <span className="dot" />
-            {business.is_open ? 'Abierto: recibiendo pedidos' : 'Cerrado'}
-          </button>
-          <div className="empty">
-            <strong>El menú y los pedidos llegan en la siguiente etapa</strong>
-            Tu negocio ya aparece verificado para los clientes.
-          </div>
-        </>
+        <BusinessDashboard business={business} setBusiness={setBusiness} />
       )}
     </div>
   )
@@ -397,6 +343,7 @@ export function CourierPanel({ profile }) {
             <p className="hint">Mantén esta pantalla abierta para compartir tu ubicación.</p>
           )}
           {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+          <CourierWork courier={courier} />
         </>
       )}
     </div>
