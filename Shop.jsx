@@ -4,6 +4,7 @@ import { supabase, STATUS_LABELS } from './lib.js'
 import { money, getPosition, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
 import { VerifiedBadge } from './Verified.jsx'
+import { MyProfile } from './Profile.jsx'
 import './shop.css'
 
 const STEPS_PICKUP = ['enviado', 'confirmado', 'en_fogones', 'listo_para_salir', 'entregado']
@@ -70,6 +71,9 @@ export function CustomerApp() {
         >
           Mis pedidos
         </button>
+        <button aria-pressed={tab === 'perfil'} onClick={() => setTab('perfil')}>
+          Mi perfil
+        </button>
       </div>
 
       {tab === 'negocios' && !business && <BusinessList onOpen={openBusiness} />}
@@ -92,6 +96,7 @@ export function CustomerApp() {
         />
       )}
       {tab === 'pedidos' && <MyOrders notice={notice} />}
+      {tab === 'perfil' && <MyProfile />}
     </>
   )
 }

@@ -4,11 +4,12 @@ import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
 import { VerifiedBadge } from './Verified.jsx'
+import { MyProfile, CourierProfile, SubscriptionBox, PaymentsAdmin } from './Profile.jsx'
 
 const VERIF = { pendiente: 'En revisión', aprobado: 'Verificado', rechazado: 'Rechazado' }
 const TIER_LABEL = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
 const BUSINESS_TIERS = ['basico', 'pro', 'premium']
-const COURIER_TIERS = ['basico', 'pro']
+const COURIER_TIERS = ['basico', 'pro', 'premium']
 const CATEGORIES = [
   'Comida casera',
   'Comida rápida',
@@ -45,6 +46,41 @@ function getPosition() {
       { enableHighAccuracy: true, timeout: 15000 }
     )
   })
+}
+
+
+/* Solo deja pasar a las funciones si la suscripción está activa */
+function SubscriptionGate({ kind, profileId, children }) {
+  const [state, setState] = useState('loading')
+
+  useEffect(() => {
+    supabase
+      .from('subscriptions')
+      .select('status, ends_at')
+      .eq('profile_id', profileId)
+      .eq('kind', kind)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const ok =
+          data && data.status === 'activa' && data.ends_at && new Date(data.ends_at).getTime() > Date.now()
+        setState(ok ? 'active' : 'inactive')
+      })
+  }, [kind, profileId])
+
+  if (state === 'loading') return <p>Cargando...</p>
+  if (state === 'active') return children
+  return (
+    <div className="stack">
+      <div className="notice">
+        Tu cuenta está verificada. Para usar las funciones, elige un plan y envía tu pago. Se activa
+        cuando lo confirmemos.
+      </div>
+      <MyProfile />
+      <SubscriptionBox kind={kind} />
+    </div>
+  )
 }
 
 /* ------------------------------------------------------------------ */
@@ -203,9 +239,53 @@ export function BusinessPanel({ profile }) {
         </div>
       )}
       {business.verification_status === 'aprobado' && (
-        <BusinessDashboard business={business} setBusiness={setBusiness} />
+        <SubscriptionGate kind="negocio" profileId={profile.id}>
+          <BusinessDashboard business={business} setBusiness={setBusiness} />
+        </SubscriptionGate>
       )}
     </div>
+  )
+}
+
+
+function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
+  const [tab, setTab] = useState('entregas')
+  return (
+    <>
+      <div className="tabs">
+        <button aria-pressed={tab === 'entregas'} onClick={() => setTab('entregas')}>
+          Entregas
+        </button>
+        <button aria-pressed={tab === 'perfil'} onClick={() => setTab('perfil')}>
+          Mi perfil
+        </button>
+      </div>
+      {tab === 'entregas' && (
+        <>
+          <button
+            className="switch"
+            role="switch"
+            aria-checked={courier.is_online}
+            onClick={toggleOnline}
+          >
+            <span className="dot" />
+            {courier.is_online ? 'Conectado: puedes recibir pedidos' : 'Desconectado'}
+          </button>
+          {courier.is_online && (
+            <p className="hint">Mantén esta pantalla abierta para compartir tu ubicación.</p>
+          )}
+          {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+          <CourierWork courier={courier} />
+        </>
+      )}
+      {tab === 'perfil' && (
+        <div className="stack">
+          <MyProfile />
+          <CourierProfile courier={courier} setCourier={setCourier} />
+          <SubscriptionBox kind="repartidor" />
+        </div>
+      )}
+    </>
   )
 }
 
@@ -337,22 +417,14 @@ export function CourierPanel({ profile }) {
         </div>
       )}
       {courier.verification_status === 'aprobado' && (
-        <>
-          <button
-            className="switch"
-            role="switch"
-            aria-checked={courier.is_online}
-            onClick={toggleOnline}
-          >
-            <span className="dot" />
-            {courier.is_online ? 'Conectado: puedes recibir pedidos' : 'Desconectado'}
-          </button>
-          {courier.is_online && (
-            <p className="hint">Mantén esta pantalla abierta para compartir tu ubicación.</p>
-          )}
-          {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
-          <CourierWork courier={courier} />
-        </>
+        <SubscriptionGate kind="repartidor" profileId={profile.id}>
+          <CourierTabs
+            courier={courier}
+            setCourier={setCourier}
+            msg={msg}
+            toggleOnline={toggleOnline}
+          />
+        </SubscriptionGate>
       )}
     </div>
   )
@@ -425,6 +497,7 @@ function VerifyRow({ kind, item, tiers, onSaved }) {
 }
 
 export function AdminPanel() {
+  const [section, setSection] = useState('solicitudes')
   const [tab, setTab] = useState('pendiente')
   const [businesses, setBusinesses] = useState([])
   const [couriers, setCouriers] = useState([])
@@ -463,6 +536,18 @@ export function AdminPanel() {
   return (
     <>
       <div className="tabs">
+        <button aria-pressed={section === 'solicitudes'} onClick={() => setSection('solicitudes')}>
+          Solicitudes
+        </button>
+        <button aria-pressed={section === 'pagos'} onClick={() => setSection('pagos')}>
+          Pagos
+        </button>
+      </div>
+
+      {section === 'pagos' && <PaymentsAdmin />}
+      {section === 'solicitudes' && (
+        <>
+      <div className="tabs">
         {['pendiente', 'aprobado', 'rechazado'].map((s) => (
           <button key={s} aria-pressed={tab === s} onClick={() => setTab(s)}>
             {VERIF[s]} ({count(s)})
@@ -492,6 +577,8 @@ export function AdminPanel() {
           <VerifyRow key={c.id} kind="repartidor" item={c} tiers={COURIER_TIERS} onSaved={load} />
         ))}
       </div>
+        </>
+      )}
     </>
   )
 }

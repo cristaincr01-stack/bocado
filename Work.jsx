@@ -3,6 +3,7 @@ import { supabase, STATUS_LABELS } from './lib.js'
 import { money, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
 import { playAlert } from './alert.js'
+import { MyProfile, BusinessProfile, SubscriptionBox } from './Profile.jsx'
 import './shop.css'
 
 /* ================================================================== */
@@ -14,7 +15,8 @@ export function BusinessDashboard({ business, setBusiness }) {
   const tabs = [
     ['pedidos', 'Pedidos'],
     ['menu', 'Menú'],
-    ['negocio', 'Mi negocio'],
+    ['negocio', 'Ajustes'],
+    ['perfil', 'Mi perfil'],
   ]
   return (
     <>
@@ -28,6 +30,13 @@ export function BusinessDashboard({ business, setBusiness }) {
       {tab === 'pedidos' && <BusinessOrders business={business} />}
       {tab === 'menu' && <MenuManager business={business} />}
       {tab === 'negocio' && <BusinessSettings business={business} setBusiness={setBusiness} />}
+      {tab === 'perfil' && (
+        <div className="stack">
+          <MyProfile />
+          <BusinessProfile business={business} setBusiness={setBusiness} />
+          <SubscriptionBox kind="negocio" />
+        </div>
+      )}
     </>
   )
 }
