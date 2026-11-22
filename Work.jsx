@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, STATUS_LABELS } from './lib.js'
 import { money, useRealtime } from './utils.js'
+import { LiveMap } from './Map.jsx'
 import './shop.css'
 
 /* ================================================================== */
@@ -457,7 +458,7 @@ export function CourierWork({ courier }) {
       supabase
         .from('orders')
         .select(
-          'id, status, delivery_address, delivery_fee, total, customer_name, customer_phone, business:businesses(name, address, phone)'
+          'id, status, delivery_address, delivery_lat, delivery_lng, delivery_fee, total, customer_name, customer_phone, business:businesses(name, address, phone, lat, lng)'
         )
         .eq('courier_id', courier.id)
         .in('status', ACTIVE)
@@ -521,6 +522,13 @@ export function CourierWork({ courier }) {
                 {job.customer_phone ? ` - ${job.customer_phone}` : ''}
               </p>
               <p className="meta">Envío: {money(job.delivery_fee)} - Total a cobrar: {money(job.total)}</p>
+              <div style={{ marginTop: 12 }}>
+                <LiveMap
+                  business={job.business}
+                  dest={{ lat: job.delivery_lat, lng: job.delivery_lng }}
+                  courierId={courier.id}
+                />
+              </div>
               {action ? (
                 <div className="order-actions">
                   <button className="btn" disabled={busyId === job.id} onClick={() => setStatus(job, action[1])}>

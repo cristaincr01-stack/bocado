@@ -416,7 +416,7 @@ function MyOrders({ notice }) {
     const { data, error: err } = await supabase
       .from('orders')
       .select(
-        'id, status, delivery_type, delivery_mode, courier_id, total, created_at, business:businesses(name, lat, lng), order_items(id, product_name, quantity)'
+        'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, created_at, business:businesses(name, lat, lng), order_items(id, product_name, quantity)'
       )
       .eq('customer_id', uid)
       .order('created_at', { ascending: false })
@@ -494,7 +494,11 @@ function MyOrders({ notice }) {
               {o.courier_id &&
                 ['listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
                   <div style={{ marginTop: 12 }}>
-                    <LiveMap business={o.business} courierId={o.courier_id} />
+                    <LiveMap
+                      business={o.business}
+                      dest={{ lat: o.delivery_lat, lng: o.delivery_lng }}
+                      courierId={o.courier_id}
+                    />
                   </div>
                 )}
 
