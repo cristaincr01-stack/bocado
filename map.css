@@ -1,0 +1,25 @@
+.map-box {
+  width: 100%;
+  height: 320px;
+  border-radius: 14px;
+  overflow: hidden;
+  z-index: 0;
+}
+.pin {
+  background: transparent;
+  border: none;
+}
+.pin span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 20px;
+  background: #fff;
+  border: 3px solid #ff6b35;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.pin-home span { border-color: #2e9e6b; }
+.pin-courier span { border-color: #2f6fed; }
