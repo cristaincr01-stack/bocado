@@ -4,6 +4,7 @@ import { money, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
 import { playAlert } from './alert.js'
 import { MyProfile, BusinessProfile, SubscriptionBox } from './Profile.jsx'
+import { Select, TIME_OPTIONS, useConfirm } from './ui.jsx'
 import './shop.css'
 
 /* ================================================================== */
@@ -32,7 +33,7 @@ export function BusinessDashboard({ business, setBusiness }) {
       {tab === 'negocio' && <BusinessSettings business={business} setBusiness={setBusiness} />}
       {tab === 'perfil' && (
         <div className="stack">
-          <MyProfile />
+          <MyProfile role="negocio" />
           <BusinessProfile business={business} setBusiness={setBusiness} />
           <SubscriptionBox kind="negocio" />
         </div>
@@ -148,7 +149,11 @@ function BusinessOrders({ business }) {
       <div className="card" key={o.id}>
         <div className="row">
           <h3>{o.customer_name || 'Cliente'}</h3>
-          <span className="badge">{STATUS_LABELS[o.status]}</span>
+          <span
+            className={`badge ${o.status === 'cancelado' ? 'rechazado' : o.status === 'entregado' ? 'aprobado' : ''}`}
+          >
+            {STATUS_LABELS[o.status]}
+          </span>
         </div>
         {o.customer_phone && <p className="meta">{o.customer_phone}</p>}
         <ul className="items-list">
@@ -178,6 +183,7 @@ function BusinessOrders({ business }) {
               />
             </div>
           )}
+        {o.status === 'cancelado' && <p className="cancelled">Este pedido fue cancelado.</p>}
         {notes[o.id] && <div className="notice" style={{ marginTop: 10, marginBottom: 0 }}>{notes[o.id]}</div>}
 
         <div className="order-actions">
@@ -310,6 +316,7 @@ function ProductForm({ business, product, onDone, onCancel }) {
 }
 
 function MenuManager({ business }) {
+  const [confirm, confirmUI] = useConfirm()
   const [items, setItems] = useState(null)
   const [editing, setEditing] = useState(null)
   const [error, setError] = useState('')
@@ -337,7 +344,7 @@ function MenuManager({ business }) {
   }
 
   async function remove(p) {
-    if (!window.confirm(`¿Eliminar "${p.name}"?`)) return
+    if (!(await confirm(`¿Eliminar "${p.name}"?`, 'Eliminar'))) return
     const { error: err } = await supabase.from('products').delete().eq('id', p.id)
     if (err) setError('No se puede eliminar un producto que ya tiene pedidos. Márcalo como agotado.')
     else load()
@@ -350,6 +357,7 @@ function MenuManager({ business }) {
 
   return (
     <>
+      {confirmUI}
       {error && <div className="msg error">{error}</div>}
 
       {editing ? (
@@ -405,14 +413,186 @@ function MenuManager({ business }) {
 
 /* ---------- Ajustes del negocio ---------- */
 
+const DAYS = [
+  ['1', 'Lunes'],
+  ['2', 'Martes'],
+  ['3', 'Miércoles'],
+  ['4', 'Jueves'],
+  ['5', 'Viernes'],
+  ['6', 'Sábado'],
+  ['0', 'Domingo'],
+]
+
+function untilText(ts) {
+  return new Date(ts).toLocaleString('es', {
+    weekday: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Havana',
+  })
+}
+
+async function reloadOpenState(business, setBusiness) {
+  const { data } = await supabase
+    .from('businesses')
+    .select('is_open, schedule, manual_override, manual_until')
+    .eq('id', business.id)
+    .maybeSingle()
+  if (data) setBusiness({ ...business, ...data })
+}
+
+function ScheduleEditor({ business, setBusiness }) {
+  const saved = business.schedule
+  const [days, setDays] = useState(() => {
+    const base = {}
+    DAYS.forEach(([k]) => {
+      const d = saved && saved[k]
+      base[k] = d
+        ? { on: true, open: d.open, close: d.close }
+        : { on: !saved, open: '09:00', close: '21:00' }
+    })
+    return base
+  })
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const patch = (k, change) => setDays((cur) => ({ ...cur, [k]: { ...cur[k], ...change } }))
+
+  function copyMonday() {
+    setDays((cur) => {
+      const next = {}
+      DAYS.forEach(([k]) => (next[k] = { ...cur['1'] }))
+      return next
+    })
+  }
+
+  async function save() {
+    setMsg(null)
+    const schedule = {}
+    for (const [k] of DAYS) {
+      const d = days[k]
+      if (!d.on) continue
+      if (d.open === d.close)
+        return setMsg({ type: 'error', text: 'La hora de abrir y la de cerrar no pueden ser iguales.' })
+      schedule[k] = { open: d.open, close: d.close }
+    }
+    if (Object.keys(schedule).length === 0)
+      return setMsg({ type: 'error', text: 'Marca al menos un día de trabajo.' })
+    setBusy(true)
+    const { error } = await supabase.rpc('set_business_schedule', {
+      p_business: business.id,
+      p_schedule: schedule,
+    })
+    setBusy(false)
+    if (error) return setMsg({ type: 'error', text: 'No pudimos guardar el horario.' })
+    setMsg({ type: 'ok', text: 'Horario guardado. Ahora abres y cierras solo.' })
+    reloadOpenState(business, setBusiness)
+  }
+
+  async function removeSchedule() {
+    setMsg(null)
+    setBusy(true)
+    const { error } = await supabase.rpc('set_business_schedule', {
+      p_business: business.id,
+      p_schedule: null,
+    })
+    setBusy(false)
+    if (error) return setMsg({ type: 'error', text: 'No pudimos quitar el horario.' })
+    setMsg({ type: 'ok', text: 'Horario quitado. Abres y cierras tú con el botón.' })
+    reloadOpenState(business, setBusiness)
+  }
+
+  return (
+    <div className="card">
+      <h3 className="section-title" style={{ marginTop: 0 }}>
+        Horario de trabajo
+      </h3>
+      <p className="hint" style={{ marginBottom: 8 }}>
+        Con horario, tu negocio aparece abierto o cerrado solo. El botón de arriba sirve para cerrar
+        antes o abrir fuera de horario.
+      </p>
+
+      {DAYS.map(([k, name]) => {
+        const d = days[k]
+        return (
+          <div className="sched-day" key={k}>
+            <div className="sched-row">
+              <b>{name}</b>
+              <button
+                type="button"
+                className="switch"
+                role="switch"
+                aria-checked={d.on}
+                onClick={() => patch(k, { on: !d.on })}
+                style={{ width: 'auto' }}
+              >
+                <span className="dot" />
+                {d.on ? 'Abre' : 'Cerrado'}
+              </button>
+            </div>
+            {d.on && (
+              <div className="sched-times">
+                <Select
+                  title={`${name}: abre`}
+                  value={d.open}
+                  onChange={(v) => patch(k, { open: v })}
+                  options={TIME_OPTIONS}
+                />
+                <span>a</span>
+                <Select
+                  title={`${name}: cierra`}
+                  value={d.close}
+                  onChange={(v) => patch(k, { close: v })}
+                  options={TIME_OPTIONS}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {msg && (
+        <div className={`msg ${msg.type}`} style={{ marginTop: 12 }}>
+          {msg.text}
+        </div>
+      )}
+      <div className="order-actions">
+        <button type="button" className="btn small" disabled={busy} onClick={save}>
+          {busy ? 'Guardando...' : 'Guardar horario'}
+        </button>
+        <button type="button" className="btn small secondary" onClick={copyMonday}>
+          Copiar lunes a todos
+        </button>
+        {saved && (
+          <button type="button" className="btn small secondary" disabled={busy} onClick={removeSchedule}>
+            Quitar horario
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function BusinessSettings({ business, setBusiness }) {
   const [fee, setFee] = useState(business.courier_fee ?? 0)
   const [msg, setMsg] = useState(null)
+  const [openMsg, setOpenMsg] = useState(null)
 
   async function toggleOpen() {
+    setOpenMsg(null)
     const next = !business.is_open
-    const { error } = await supabase.from('businesses').update({ is_open: next }).eq('id', business.id)
-    if (!error) setBusiness({ ...business, is_open: next })
+    const { data, error } = await supabase.rpc('set_business_open_now', {
+      p_business: business.id,
+      p_open: next,
+    })
+    if (error) return setOpenMsg({ type: 'error', text: 'No pudimos cambiar el estado.' })
+    setBusiness({ ...business, is_open: next })
+    if (business.schedule && data)
+      setOpenMsg({
+        type: 'ok',
+        text: `Quedará ${next ? 'abierto' : 'cerrado'} hasta el ${untilText(data)}. Luego vuelve al horario.`,
+      })
+    reloadOpenState({ ...business, is_open: next }, setBusiness)
   }
 
   async function saveFee(e) {
@@ -434,6 +614,10 @@ function BusinessSettings({ business, setBusiness }) {
         <span className="dot" />
         {business.is_open ? 'Abierto: recibiendo pedidos' : 'Cerrado: no recibes pedidos'}
       </button>
+      {business.schedule && <p className="hint">Horario automático activo.</p>}
+      {openMsg && <div className={`msg ${openMsg.type}`}>{openMsg.text}</div>}
+
+      <ScheduleEditor business={business} setBusiness={setBusiness} />
 
       <form className="card" onSubmit={saveFee}>
         <label className="field" style={{ marginBottom: 8 }}>

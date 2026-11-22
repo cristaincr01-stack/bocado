@@ -119,8 +119,17 @@ function AuthScreen() {
                 </div>
 
                 <label className="field">
-                  <span>Nombre</span>
+                  <span>
+                    {role === 'negocio'
+                      ? 'Nombre del propietario'
+                      : role === 'repartidor'
+                        ? 'Nombre completo'
+                        : 'Nombre'}
+                  </span>
                   <input value={form.name} onChange={set('name')} autoComplete="name" />
+                  {role !== 'cliente' && (
+                    <p className="hint">Solo lo ve el administrador. No se muestra al público.</p>
+                  )}
                 </label>
                 <label className="field">
                   <span>Teléfono{role === 'cliente' ? ' (opcional)' : ''}</span>

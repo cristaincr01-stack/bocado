@@ -3,6 +3,7 @@ import { MapPin } from 'lucide-react'
 import { supabase } from './lib.js'
 import { getPosition } from './utils.js'
 import { VerifiedBadge } from './Verified.jsx'
+import { Select, FilePick } from './ui.jsx'
 
 const TIER_NAME = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
 const TIERS = ['basico', 'pro', 'premium']
@@ -74,7 +75,7 @@ function priceText(plan) {
 /* Mis datos (todas las cuentas)                                       */
 /* ------------------------------------------------------------------ */
 
-export function MyProfile() {
+export function MyProfile({ role = 'cliente' }) {
   const [uid, setUid] = useState(null)
   const [form, setForm] = useState({ full_name: '', phone: '' })
   const [msg, setMsg] = useState(null)
@@ -112,15 +113,25 @@ export function MyProfile() {
   return (
     <form className="card" onSubmit={save}>
       <h3 className="section-title" style={{ marginTop: 0 }}>
-        Mis datos
+        {role === 'negocio' ? 'Datos del propietario' : 'Mis datos'}
       </h3>
       <label className="field">
-        <span>Nombre y apellidos</span>
+        <span>
+          {role === 'negocio'
+            ? 'Nombre del propietario'
+            : role === 'repartidor'
+              ? 'Nombre completo'
+              : 'Nombre y apellidos'}
+        </span>
         <input
           value={form.full_name}
           onChange={(e) => setForm({ ...form, full_name: e.target.value })}
           autoComplete="name"
         />
+        {role === 'negocio' && (
+          <p className="hint">Solo lo ve el administrador. Tus clientes ven el nombre de tu negocio.</p>
+        )}
+        {role === 'repartidor' && <p className="hint">Solo lo ve el administrador.</p>}
       </label>
       <label className="field">
         <span>Teléfono</span>
@@ -203,14 +214,15 @@ export function BusinessProfile({ business, setBusiness }) {
         <span>Nombre del negocio</span>
         <input value={f.name} onChange={set('name')} />
       </label>
-      <label className="field">
+      <div className="field">
         <span>Categoría</span>
-        <select value={f.category} onChange={set('category')}>
-          {CATEGORIES.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </label>
+        <Select
+          title="Categoría"
+          value={f.category}
+          onChange={(v) => setF({ ...f, category: v })}
+          options={CATEGORIES}
+        />
+      </div>
       <label className="field">
         <span>Dirección</span>
         <input value={f.address} onChange={set('address')} />
@@ -266,14 +278,10 @@ export function CourierProfile({ courier, setCourier }) {
       <h3 className="section-title" style={{ marginTop: 0 }}>
         Mi vehículo
       </h3>
-      <label className="field">
+      <div className="field">
         <span>¿En qué te mueves?</span>
-        <select value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-          {VEHICLES.map((v) => (
-            <option key={v}>{v}</option>
-          ))}
-        </select>
-      </label>
+        <Select title="¿En qué te mueves?" value={vehicle} onChange={setVehicle} options={VEHICLES} />
+      </div>
       {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
       <button className="btn small" disabled={busy}>
         {busy ? 'Guardando...' : 'Guardar vehículo'}
@@ -476,16 +484,19 @@ export function SubscriptionBox({ kind }) {
             Cada plan dura 30 días desde que confirmamos el pago.
           </p>
 
-          <label className="field" style={{ marginTop: 14 }}>
+          <div className="field" style={{ marginTop: 14 }}>
             <span>Método de pago</span>
-            <select value={method} onChange={(e) => setMethod(e.target.value)}>
-              {methods.map((m) => (
-                <option key={m.code} value={m.code}>
-                  {METHOD_LABEL[m.code] || m.label} ({m.currency})
-                </option>
-              ))}
-            </select>
-          </label>
+            <Select
+              title="Método de pago"
+              value={method}
+              onChange={setMethod}
+              options={methods.map((m) => ({
+                value: m.code,
+                label: METHOD_LABEL[m.code] || m.label,
+                hint: m.currency,
+              }))}
+            />
+          </div>
 
           {chosen && (
             <div className="notice" style={{ whiteSpace: 'pre-wrap' }}>
@@ -498,14 +509,10 @@ export function SubscriptionBox({ kind }) {
             <span>Número o referencia de la transacción</span>
             <input value={reference} onChange={(e) => setReference(e.target.value)} />
           </label>
-          <label className="field">
+          <div className="field">
             <span>Captura del pago</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
-            />
-          </label>
+            <FilePick file={file} onChange={setFile} text="Subir captura del pago" />
+          </div>
 
           {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
           <button className="btn" disabled={busy}>

@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
-import { MapPin } from 'lucide-react'
+import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike, ChevronRight } from 'lucide-react'
 import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
 import { VerifiedBadge } from './Verified.jsx'
+import { Select } from './ui.jsx'
 import { MyProfile, CourierProfile, SubscriptionBox, PaymentsAdmin, PricingAdmin } from './Profile.jsx'
 
 const VERIF = { pendiente: 'En revisión', aprobado: 'Verificado', rechazado: 'Rechazado' }
@@ -77,7 +78,7 @@ function SubscriptionGate({ kind, profileId, children }) {
         Tu cuenta está verificada. Para usar las funciones, elige un plan y envía tu pago. Se activa
         cuando lo confirmemos.
       </div>
-      <MyProfile />
+      <MyProfile role={kind} />
       <SubscriptionBox kind={kind} />
     </div>
   )
@@ -180,14 +181,15 @@ export function BusinessPanel({ profile }) {
           <span>Nombre del negocio</span>
           <input value={form.name} onChange={set('name')} />
         </label>
-        <label className="field">
+        <div className="field">
           <span>Categoría</span>
-          <select value={form.category} onChange={set('category')}>
-            {CATEGORIES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </label>
+          <Select
+            title="Categoría"
+            value={form.category}
+            onChange={(v) => setForm({ ...form, category: v })}
+            options={CATEGORIES}
+          />
+        </div>
         <label className="field">
           <span>Dirección</span>
           <input value={form.address} onChange={set('address')} />
@@ -280,7 +282,7 @@ function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
       )}
       {tab === 'perfil' && (
         <div className="stack">
-          <MyProfile />
+          <MyProfile role="repartidor" />
           <CourierProfile courier={courier} setCourier={setCourier} />
           <SubscriptionBox kind="repartidor" />
         </div>
@@ -379,14 +381,10 @@ export function CourierPanel({ profile }) {
         <h3 className="section-title" style={{ marginTop: 0 }}>
           Solicita ser repartidor
         </h3>
-        <label className="field">
+        <div className="field">
           <span>¿En qué te mueves?</span>
-          <select value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-            {VEHICLES.map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
-        </label>
+          <Select title="¿En qué te mueves?" value={vehicle} onChange={setVehicle} options={VEHICLES} />
+        </div>
         {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
         <button className="btn" disabled={busy}>
           {busy ? 'Enviando...' : 'Enviar para verificación'}
@@ -441,11 +439,12 @@ function VerifyRow({ kind, item, tiers, onSaved }) {
   const [error, setError] = useState('')
 
   const person = kind === 'negocio' ? item.owner : item.profile
-  const title = kind === 'negocio' ? item.name : `${item.vehicle} - ${person?.full_name || 'Sin nombre'}`
+  const title = kind === 'negocio' ? item.name : item.vehicle || 'Repartidor'
   const detail =
     kind === 'negocio'
       ? [item.category, item.address].filter(Boolean).join(' - ')
-      : 'Repartidor'
+      : `Repartidor - ${item.vehicle || 'sin vehículo'}`
+  const initial = (title || '?').trim().charAt(0).toUpperCase()
 
   async function save() {
     setBusy(true)
@@ -463,32 +462,47 @@ function VerifyRow({ kind, item, tiers, onSaved }) {
 
   return (
     <div className="card">
-      <div className="row">
-        <h3>{title}</h3>
+      <div className="adm-head">
+        <div className="adm-avatar">{initial}</div>
+        <div className="grow">
+          <h3>{title}</h3>
+          <p className="meta" style={{ margin: 0 }}>
+            {detail}
+          </p>
+        </div>
         <Badge status={item.verification_status} tier={item.tier} />
       </div>
-      <p className="meta">{detail}</p>
+
       {person && (
-        <p className="meta">
-          {person.full_name}
-          {person.phone ? ` - ${person.phone}` : ''}
-        </p>
+        <div className="adm-owner">
+          <Lock size={16} />
+          <div>
+            <small>{kind === 'negocio' ? 'Propietario (privado)' : 'Nombre completo (privado)'}</small>
+            {person.full_name || 'Sin nombre'}
+            {person.phone ? ` - ${person.phone}` : ''}
+          </div>
+        </div>
       )}
-      <div className="inline-controls">
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="pendiente">En revisión</option>
-          <option value="aprobado">Aprobar</option>
-          <option value="rechazado">Rechazar</option>
-        </select>
-        <select value={tier} onChange={(e) => setTier(e.target.value)}>
-          {tiers.map((t) => (
-            <option key={t} value={t}>
-              Nivel {TIER_LABEL[t]}
-            </option>
-          ))}
-        </select>
+
+      <div className="adm-controls">
+        <Select
+          title="Estado"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: 'pendiente', label: 'En revisión' },
+            { value: 'aprobado', label: 'Aprobar' },
+            { value: 'rechazado', label: 'Rechazar' },
+          ]}
+        />
+        <Select
+          title="Nivel"
+          value={tier}
+          onChange={setTier}
+          options={tiers.map((t) => ({ value: t, label: `Nivel ${TIER_LABEL[t]}` }))}
+        />
         <button className="btn small" onClick={save} disabled={busy}>
-          {busy ? 'Guardando...' : 'Guardar'}
+          {busy ? 'Guardando...' : 'Guardar cambios'}
         </button>
       </div>
       {error && <div className="msg error" style={{ marginTop: 10 }}>{error}</div>}
@@ -496,15 +510,23 @@ function VerifyRow({ kind, item, tiers, onSaved }) {
   )
 }
 
+const ADMIN_SECTIONS = [
+  ['resumen', 'Resumen', LayoutDashboard],
+  ['solicitudes', 'Solicitudes', ClipboardCheck],
+  ['pagos', 'Pagos', Wallet],
+  ['precios', 'Precios', Tag],
+]
+
 export function AdminPanel() {
-  const [section, setSection] = useState('solicitudes')
+  const [section, setSection] = useState('resumen')
   const [tab, setTab] = useState('pendiente')
   const [businesses, setBusinesses] = useState([])
   const [couriers, setCouriers] = useState([])
+  const [pendingPayments, setPendingPayments] = useState(0)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    const [b, c] = await Promise.all([
+    const [b, c, pay] = await Promise.all([
       supabase
         .from('businesses')
         .select(
@@ -515,11 +537,16 @@ export function AdminPanel() {
         .from('couriers')
         .select('id, vehicle, verification_status, tier, profile:profiles(full_name, phone)')
         .order('created_at', { ascending: false }),
+      supabase
+        .from('subscription_payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pendiente'),
     ])
     if (b.error || c.error) setError('No pudimos cargar las solicitudes.')
     else setError('')
     setBusinesses(b.data || [])
     setCouriers(c.data || [])
+    setPendingPayments(pay.count || 0)
   }, [])
 
   useEffect(() => {
@@ -533,56 +560,99 @@ export function AdminPanel() {
     businesses.filter((x) => x.verification_status === status).length +
     couriers.filter((x) => x.verification_status === status).length
 
+  const pending = count('pendiente')
+  const activeBusinesses = businesses.filter((x) => x.verification_status === 'aprobado').length
+  const activeCouriers = couriers.filter((x) => x.verification_status === 'aprobado').length
+
+  const badgeFor = (id) => (id === 'solicitudes' ? pending : id === 'pagos' ? pendingPayments : 0)
+
+  function go(id, nextTab) {
+    if (nextTab) setTab(nextTab)
+    setSection(id)
+    if (id === 'solicitudes' || id === 'resumen') load()
+  }
+
   return (
     <>
-      <div className="tabs">
-        <button aria-pressed={section === 'solicitudes'} onClick={() => setSection('solicitudes')}>
-          Solicitudes
-        </button>
-        <button aria-pressed={section === 'pagos'} onClick={() => setSection('pagos')}>
-          Pagos
-        </button>
-        <button aria-pressed={section === 'precios'} onClick={() => setSection('precios')}>
-          Precios
-        </button>
-      </div>
-
-      {section === 'pagos' && <PaymentsAdmin />}
-      {section === 'precios' && <PricingAdmin />}
-      {section === 'solicitudes' && (
-        <>
-      <div className="tabs">
-        {['pendiente', 'aprobado', 'rechazado'].map((s) => (
-          <button key={s} aria-pressed={tab === s} onClick={() => setTab(s)}>
-            {VERIF[s]} ({count(s)})
+      <nav className="adm-nav" aria-label="Administración">
+        {ADMIN_SECTIONS.map(([id, label, Icon]) => (
+          <button key={id} aria-pressed={section === id} onClick={() => go(id)}>
+            <Icon size={18} /> {label}
+            {badgeFor(id) > 0 && <span className="adm-dot">{badgeFor(id)}</span>}
           </button>
         ))}
-      </div>
+      </nav>
 
       {error && <div className="msg error">{error}</div>}
 
-      {bList.length === 0 && cList.length === 0 && (
-        <div className="empty">
-          <strong>No hay solicitudes aquí</strong>
-          Cuando alguien se registre aparecerá en esta lista.
+      {section === 'resumen' && (
+        <div className="adm-stats">
+          <button className={`adm-stat ${pending > 0 ? 'alert' : ''}`} onClick={() => go('solicitudes', 'pendiente')}>
+            <ClipboardCheck size={22} />
+            <b>{pending}</b>
+            <span>Solicitudes por revisar</span>
+          </button>
+          <button
+            className={`adm-stat ${pendingPayments > 0 ? 'alert' : ''}`}
+            onClick={() => go('pagos')}
+          >
+            <Wallet size={22} />
+            <b>{pendingPayments}</b>
+            <span>Pagos por confirmar</span>
+          </button>
+          <button className="adm-stat" onClick={() => go('solicitudes', 'aprobado')}>
+            <Store size={22} />
+            <b>{activeBusinesses}</b>
+            <span>Negocios verificados</span>
+          </button>
+          <button className="adm-stat" onClick={() => go('solicitudes', 'aprobado')}>
+            <Bike size={22} />
+            <b>{activeCouriers}</b>
+            <span>Repartidores verificados</span>
+          </button>
+          <button className="adm-stat" style={{ gridColumn: '1 / -1' }} onClick={() => go('precios')}>
+            <Tag size={22} />
+            <span>Cambiar precios de los planes y datos de cobro</span>
+            <ChevronRight size={18} />
+          </button>
         </div>
       )}
 
-      {bList.length > 0 && <h3 className="section-title">Negocios</h3>}
-      <div className="list">
-        {bList.map((b) => (
-          <VerifyRow key={b.id} kind="negocio" item={b} tiers={BUSINESS_TIERS} onSaved={load} />
-        ))}
-      </div>
+      {section === 'solicitudes' && (
+        <>
+          <div className="adm-seg">
+            {['pendiente', 'aprobado', 'rechazado'].map((s) => (
+              <button key={s} aria-pressed={tab === s} onClick={() => setTab(s)}>
+                {VERIF[s]} ({count(s)})
+              </button>
+            ))}
+          </div>
 
-      {cList.length > 0 && <h3 className="section-title">Repartidores</h3>}
-      <div className="list">
-        {cList.map((c) => (
-          <VerifyRow key={c.id} kind="repartidor" item={c} tiers={COURIER_TIERS} onSaved={load} />
-        ))}
-      </div>
+          {bList.length === 0 && cList.length === 0 && (
+            <div className="empty">
+              <strong>No hay solicitudes aquí</strong>
+              Cuando alguien se registre aparecerá en esta lista.
+            </div>
+          )}
+
+          {bList.length > 0 && <h3 className="section-title">Negocios</h3>}
+          <div className="list">
+            {bList.map((b) => (
+              <VerifyRow key={b.id} kind="negocio" item={b} tiers={BUSINESS_TIERS} onSaved={load} />
+            ))}
+          </div>
+
+          {cList.length > 0 && <h3 className="section-title">Repartidores</h3>}
+          <div className="list">
+            {cList.map((c) => (
+              <VerifyRow key={c.id} kind="repartidor" item={c} tiers={COURIER_TIERS} onSaved={load} />
+            ))}
+          </div>
         </>
       )}
+
+      {section === 'pagos' && <PaymentsAdmin />}
+      {section === 'precios' && <PricingAdmin />}
     </>
   )
 }
