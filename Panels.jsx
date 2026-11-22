@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike, ChevronRight } from 'lucide-react'
+import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike, Users, PackageCheck } from 'lucide-react'
 import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
 import { VerifiedBadge } from './Verified.jsx'
 import { Select } from './ui.jsx'
+import { money } from './utils.js'
 import { MyProfile, CourierProfile, SubscriptionBox, PaymentsAdmin, PricingAdmin } from './Profile.jsx'
 
 const VERIF = { pendiente: 'En revisión', aprobado: 'Verificado', rechazado: 'Rechazado' }
@@ -120,6 +121,13 @@ export function BusinessPanel({ profile }) {
       .maybeSingle()
       .then(({ data }) => setBusiness(data || null))
   }, [profile.id])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const n = data.user?.user_metadata?.business_name
+      if (n) setForm((f) => (f.name ? f : { ...f, name: n }))
+    })
+  }, [])
 
   async function useMyLocation() {
     setMsg(null)
@@ -344,9 +352,11 @@ export function CourierPanel({ profile }) {
     e.preventDefault()
     setBusy(true)
     setMsg(null)
+    const { data: u } = await supabase.auth.getUser()
+    const display_name = u.user?.user_metadata?.public_name || null
     const { data, error } = await supabase
       .from('couriers')
-      .insert({ id: profile.id, vehicle })
+      .insert({ id: profile.id, vehicle, display_name })
       .select()
       .single()
     setBusy(false)
@@ -432,18 +442,19 @@ export function CourierPanel({ profile }) {
 /* ADMIN                                                               */
 /* ------------------------------------------------------------------ */
 
-function VerifyRow({ kind, item, tiers, onSaved }) {
+function VerifyRow({ kind, item, tiers, onSaved, done }) {
   const [status, setStatus] = useState(item.verification_status)
   const [tier, setTier] = useState(item.tier)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   const person = kind === 'negocio' ? item.owner : item.profile
-  const title = kind === 'negocio' ? item.name : item.vehicle || 'Repartidor'
+  const title = kind === 'negocio' ? item.name : item.display_name || person?.full_name || 'Repartidor'
   const detail =
     kind === 'negocio'
       ? [item.category, item.address].filter(Boolean).join(' - ')
       : `Repartidor - ${item.vehicle || 'sin vehículo'}`
+  const doneText = done === undefined ? null : `${done} ${done === 1 ? 'pedido entregado' : 'pedidos entregados'}`
   const initial = (title || '?').trim().charAt(0).toUpperCase()
 
   async function save() {
@@ -469,6 +480,11 @@ function VerifyRow({ kind, item, tiers, onSaved }) {
           <p className="meta" style={{ margin: 0 }}>
             {detail}
           </p>
+          {doneText && item.verification_status === 'aprobado' && (
+            <p className="meta" style={{ margin: 0, fontWeight: 700 }}>
+              {doneText}
+            </p>
+          )}
         </div>
         <Badge status={item.verification_status} tier={item.tier} />
       </div>
@@ -523,10 +539,11 @@ export function AdminPanel() {
   const [businesses, setBusinesses] = useState([])
   const [couriers, setCouriers] = useState([])
   const [pendingPayments, setPendingPayments] = useState(0)
+  const [stats, setStats] = useState(null)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    const [b, c, pay] = await Promise.all([
+    const [b, c, pay, st] = await Promise.all([
       supabase
         .from('businesses')
         .select(
@@ -535,18 +552,20 @@ export function AdminPanel() {
         .order('created_at', { ascending: false }),
       supabase
         .from('couriers')
-        .select('id, vehicle, verification_status, tier, profile:profiles(full_name, phone)')
+        .select('id, vehicle, display_name, verification_status, tier, profile:profiles(full_name, phone)')
         .order('created_at', { ascending: false }),
       supabase
         .from('subscription_payments')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'pendiente'),
+      supabase.rpc('admin_stats'),
     ])
     if (b.error || c.error) setError('No pudimos cargar las solicitudes.')
     else setError('')
     setBusinesses(b.data || [])
     setCouriers(c.data || [])
     setPendingPayments(pay.count || 0)
+    setStats(st.error ? null : st.data)
   }, [])
 
   useEffect(() => {
@@ -563,6 +582,11 @@ export function AdminPanel() {
   const pending = count('pendiente')
   const activeBusinesses = businesses.filter((x) => x.verification_status === 'aprobado').length
   const activeCouriers = couriers.filter((x) => x.verification_status === 'aprobado').length
+
+  const doneBiz = Object.fromEntries(((stats && stats.by_business) || []).map((x) => [x.id, x.done]))
+  const doneCou = Object.fromEntries(((stats && stats.by_courier) || []).map((x) => [x.id, x.done]))
+  const topBiz = ((stats && stats.by_business) || []).filter((x) => x.done > 0).slice(0, 5)
+  const topCou = ((stats && stats.by_courier) || []).filter((x) => x.done > 0).slice(0, 5)
 
   const badgeFor = (id) => (id === 'solicitudes' ? pending : id === 'pagos' ? pendingPayments : 0)
 
@@ -586,36 +610,86 @@ export function AdminPanel() {
       {error && <div className="msg error">{error}</div>}
 
       {section === 'resumen' && (
-        <div className="adm-stats">
-          <button className={`adm-stat ${pending > 0 ? 'alert' : ''}`} onClick={() => go('solicitudes', 'pendiente')}>
-            <ClipboardCheck size={22} />
-            <b>{pending}</b>
-            <span>Solicitudes por revisar</span>
-          </button>
-          <button
-            className={`adm-stat ${pendingPayments > 0 ? 'alert' : ''}`}
-            onClick={() => go('pagos')}
-          >
-            <Wallet size={22} />
-            <b>{pendingPayments}</b>
-            <span>Pagos por confirmar</span>
-          </button>
-          <button className="adm-stat" onClick={() => go('solicitudes', 'aprobado')}>
-            <Store size={22} />
-            <b>{activeBusinesses}</b>
-            <span>Negocios verificados</span>
-          </button>
-          <button className="adm-stat" onClick={() => go('solicitudes', 'aprobado')}>
-            <Bike size={22} />
-            <b>{activeCouriers}</b>
-            <span>Repartidores verificados</span>
-          </button>
-          <button className="adm-stat" style={{ gridColumn: '1 / -1' }} onClick={() => go('precios')}>
+        <>
+          <div className="adm-stats">
+            <button
+              className={`adm-stat ${pending > 0 ? 'alert' : ''}`}
+              onClick={() => go('solicitudes', 'pendiente')}
+            >
+              <ClipboardCheck size={22} />
+              <b>{pending}</b>
+              <span>Solicitudes por revisar</span>
+            </button>
+            <button
+              className={`adm-stat ${pendingPayments > 0 ? 'alert' : ''}`}
+              onClick={() => go('pagos')}
+            >
+              <Wallet size={22} />
+              <b>{pendingPayments}</b>
+              <span>Pagos por confirmar</span>
+            </button>
+            <div className="adm-stat static">
+              <Users size={22} />
+              <b>{stats ? stats.customers : '-'}</b>
+              <span>Clientes registrados</span>
+            </div>
+            <div className="adm-stat static">
+              <PackageCheck size={22} />
+              <b>{stats ? stats.orders_done : '-'}</b>
+              <span>Pedidos completados</span>
+            </div>
+            <button className="adm-stat" onClick={() => go('solicitudes', 'aprobado')}>
+              <Store size={22} />
+              <b>{activeBusinesses}</b>
+              <span>Negocios verificados</span>
+            </button>
+            <button className="adm-stat" onClick={() => go('solicitudes', 'aprobado')}>
+              <Bike size={22} />
+              <b>{activeCouriers}</b>
+              <span>Repartidores verificados</span>
+            </button>
+          </div>
+
+          <h3 className="section-title">Mejores negocios</h3>
+          {topBiz.length === 0 ? (
+            <p className="hint">Aún no hay pedidos entregados.</p>
+          ) : (
+            <div className="card adm-rank">
+              {topBiz.map((x, i) => (
+                <div className="adm-rank-row" key={x.id}>
+                  <span className="pos">{i + 1}</span>
+                  <span className="name">{x.name}</span>
+                  <span className="val">
+                    {x.done} {x.done === 1 ? 'pedido' : 'pedidos'}
+                    <small>{money(x.sales)}</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <h3 className="section-title">Mejores repartidores</h3>
+          {topCou.length === 0 ? (
+            <p className="hint">Aún no hay entregas completadas.</p>
+          ) : (
+            <div className="card adm-rank">
+              {topCou.map((x, i) => (
+                <div className="adm-rank-row" key={x.id}>
+                  <span className="pos">{i + 1}</span>
+                  <span className="name">{x.name}</span>
+                  <span className="val">
+                    {x.done} {x.done === 1 ? 'entrega' : 'entregas'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button className="adm-stat" style={{ width: '100%', marginTop: 18 }} onClick={() => go('precios')}>
             <Tag size={22} />
             <span>Cambiar precios de los planes y datos de cobro</span>
-            <ChevronRight size={18} />
           </button>
-        </div>
+        </>
       )}
 
       {section === 'solicitudes' && (
@@ -638,14 +712,28 @@ export function AdminPanel() {
           {bList.length > 0 && <h3 className="section-title">Negocios</h3>}
           <div className="list">
             {bList.map((b) => (
-              <VerifyRow key={b.id} kind="negocio" item={b} tiers={BUSINESS_TIERS} onSaved={load} />
+              <VerifyRow
+                key={b.id}
+                kind="negocio"
+                item={b}
+                tiers={BUSINESS_TIERS}
+                onSaved={load}
+                done={stats ? doneBiz[b.id] || 0 : undefined}
+              />
             ))}
           </div>
 
           {cList.length > 0 && <h3 className="section-title">Repartidores</h3>}
           <div className="list">
             {cList.map((c) => (
-              <VerifyRow key={c.id} kind="repartidor" item={c} tiers={COURIER_TIERS} onSaved={load} />
+              <VerifyRow
+                key={c.id}
+                kind="repartidor"
+                item={c}
+                tiers={COURIER_TIERS}
+                onSaved={load}
+                done={stats ? doneCou[c.id] || 0 : undefined}
+              />
             ))}
           </div>
         </>

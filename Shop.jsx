@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin, CheckCircle2 } from 'lucide-react'
 import { supabase, STATUS_LABELS } from './lib.js'
 import { money, getPosition, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
@@ -412,9 +412,14 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
 
 /* ------------------------------------------------------------------ */
 
+function sumTotals(rows) {
+  return rows.reduce((t, o) => t + Number(o.total || 0), 0)
+}
+
 function MyOrders({ notice }) {
   const [uid, setUid] = useState(null)
   const [orders, setOrders] = useState(null)
+  const [spent, setSpent] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -423,18 +428,29 @@ function MyOrders({ notice }) {
 
   const load = useCallback(async () => {
     if (!uid) return
-    const { data, error: err } = await supabase
-      .from('orders')
-      .select(
-        'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, created_at, business:businesses(name, tier, lat, lng), order_items(id, product_name, quantity)'
-      )
-      .eq('customer_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(30)
-    if (err) setError('No pudimos cargar tus pedidos.')
+    const [list, done] = await Promise.all([
+      supabase
+        .from('orders')
+        .select(
+          'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, created_at, business:businesses(name, tier, lat, lng), order_items(id, product_name, quantity)'
+        )
+        .eq('customer_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(30),
+      supabase.from('orders').select('total, created_at').eq('customer_id', uid).eq('status', 'entregado'),
+    ])
+    if (list.error) setError('No pudimos cargar tus pedidos.')
     else {
       setError('')
-      setOrders(data)
+      setOrders(list.data)
+    }
+    if (done.data) {
+      const now = new Date()
+      const month = done.data.filter((o) => {
+        const d = new Date(o.created_at)
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+      })
+      setSpent({ count: done.data.length, total: sumTotals(done.data), month: sumTotals(month) })
     }
   }, [uid])
 
@@ -453,10 +469,118 @@ function MyOrders({ notice }) {
     else load()
   }
 
+  const dateText = (ts) =>
+    new Date(ts).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
+
+  const inProgress = (orders || []).filter((o) => !['entregado', 'cancelado'].includes(o.status))
+  const history = (orders || []).filter((o) => ['entregado', 'cancelado'].includes(o.status))
+
+  const renderActive = (o) => {
+    const steps = o.delivery_type === 'recogida' ? STEPS_PICKUP : STEPS_DELIVERY
+    const idx = steps.indexOf(o.status)
+    return (
+      <div className="card" key={o.id}>
+        <div className="row">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {o.business?.name || 'Negocio'}
+            {o.business?.tier && <VerifiedBadge tier={o.business.tier} size={16} />}
+          </h3>
+          <span className="badge">{STATUS_LABELS[o.status]}</span>
+        </div>
+        <ul className="items-list">
+          {o.order_items.map((i) => (
+            <li key={i.id}>
+              {i.quantity} × {i.product_name}
+            </li>
+          ))}
+        </ul>
+        <p className="meta">Total: {money(o.total)}</p>
+
+        <ul className="steps">
+          {steps.map((st, i) => (
+            <li key={st} className={`step ${i < idx ? 'done' : ''} ${i === idx ? 'now' : ''}`}>
+              <span className="pip" />
+              {STATUS_LABELS[st]}
+            </li>
+          ))}
+        </ul>
+
+        {o.courier_id && ['listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
+          <div style={{ marginTop: 12 }}>
+            <LiveMap
+              business={o.business}
+              dest={{ lat: o.delivery_lat, lng: o.delivery_lng }}
+              courierId={o.courier_id}
+            />
+          </div>
+        )}
+
+        {o.status === 'enviado' && (
+          <div className="order-actions">
+            <button className="btn secondary small" onClick={() => cancel(o.id)}>
+              Cancelar pedido
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderHistory = (o) => {
+    const delivered = o.status === 'entregado'
+    return (
+      <div className="card done-card" key={o.id}>
+        <div className="row">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {o.business?.name || 'Negocio'}
+            {o.business?.tier && <VerifiedBadge tier={o.business.tier} size={16} />}
+          </h3>
+          <span className={`badge ${delivered ? 'aprobado' : 'rechazado'}`}>
+            {delivered ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <CheckCircle2 size={14} /> Entregado
+              </span>
+            ) : (
+              'Cancelado'
+            )}
+          </span>
+        </div>
+        <p className="meta">
+          {dateText(o.created_at)} · {o.delivery_type === 'recogida' ? 'Recogida en el local' : 'A domicilio'}
+        </p>
+        <p className="done-items">
+          {o.order_items.map((i) => `${i.quantity} × ${i.product_name}`).join(', ')}
+        </p>
+        <div className="sum-line total">
+          <span>Total</span>
+          <span className={delivered ? '' : 'struck'}>{money(o.total)}</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       {notice && <div className="notice">{notice}</div>}
       {error && <div className="msg error">{error}</div>}
+
+      {spent && spent.count > 0 && (
+        <div className="spend">
+          <div>
+            <small>Gastado en total</small>
+            <b>{money(spent.total)}</b>
+          </div>
+          <div>
+            <small>Este mes</small>
+            <b>{money(spent.month)}</b>
+          </div>
+          <div>
+            <small>Pedidos completados</small>
+            <b>{spent.count}</b>
+          </div>
+        </div>
+      )}
+
       {orders === null && !error && <p>Cargando...</p>}
       {orders && orders.length === 0 && (
         <div className="empty">
@@ -464,68 +588,12 @@ function MyOrders({ notice }) {
           Elige un negocio y arma tu primer pedido.
         </div>
       )}
-      <div className="list">
-        {(orders || []).map((o) => {
-          const steps = o.delivery_type === 'recogida' ? STEPS_PICKUP : STEPS_DELIVERY
-          const idx = steps.indexOf(o.status)
-          return (
-            <div className="card" key={o.id}>
-              <div className="row">
-                <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {o.business?.name || 'Negocio'}
-                  {o.business?.tier && <VerifiedBadge tier={o.business.tier} size={16} />}
-                </h3>
-                <span className={`badge ${o.status === 'cancelado' ? 'rechazado' : o.status === 'entregado' ? 'aprobado' : ''}`}>
-                  {STATUS_LABELS[o.status]}
-                </span>
-              </div>
-              <ul className="items-list">
-                {o.order_items.map((i) => (
-                  <li key={i.id}>
-                    {i.quantity} × {i.product_name}
-                  </li>
-                ))}
-              </ul>
-              <p className="meta">Total: {money(o.total)}</p>
 
-              {o.status === 'cancelado' ? (
-                <p className="cancelled">Este pedido fue cancelado.</p>
-              ) : (
-                <ul className="steps">
-                  {steps.map((s, i) => (
-                    <li
-                      key={s}
-                      className={`step ${i < idx || o.status === 'entregado' ? 'done' : ''} ${i === idx && o.status !== 'entregado' ? 'now' : ''}`}
-                    >
-                      <span className="pip" />
-                      {STATUS_LABELS[s]}
-                    </li>
-                  ))}
-                </ul>
-              )}
+      {inProgress.length > 0 && <h3 className="section-title" style={{ marginTop: 0 }}>En curso</h3>}
+      <div className="list">{inProgress.map(renderActive)}</div>
 
-              {o.courier_id &&
-                ['listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
-                  <div style={{ marginTop: 12 }}>
-                    <LiveMap
-                      business={o.business}
-                      dest={{ lat: o.delivery_lat, lng: o.delivery_lng }}
-                      courierId={o.courier_id}
-                    />
-                  </div>
-                )}
-
-              {o.status === 'enviado' && (
-                <div className="order-actions">
-                  <button className="btn secondary small" onClick={() => cancel(o.id)}>
-                    Cancelar pedido
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {history.length > 0 && <h3 className="section-title">Historial</h3>}
+      <div className="list">{history.map(renderHistory)}</div>
     </>
   )
 }

@@ -33,7 +33,7 @@ function translateError(message = '') {
 function AuthScreen() {
   const [mode, setMode] = useState('entrar')
   const [role, setRole] = useState('cliente')
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
+  const [form, setForm] = useState({ name: '', business: '', publicName: '', email: '', phone: '', password: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
 
@@ -45,6 +45,10 @@ function AuthScreen() {
 
     if (mode === 'crear') {
       if (!form.name.trim()) return setMsg({ type: 'error', text: 'Escribe tu nombre.' })
+      if (role === 'negocio' && !form.business.trim())
+        return setMsg({ type: 'error', text: 'Escribe el nombre de tu negocio.' })
+      if (role === 'repartidor' && !form.publicName.trim())
+        return setMsg({ type: 'error', text: 'Escribe tu nombre público.' })
       if (role !== 'cliente' && !form.phone.trim())
         return setMsg({ type: 'error', text: 'Escribe tu teléfono para que podamos contactarte.' })
       if (form.password.length < 6)
@@ -64,7 +68,13 @@ function AuthScreen() {
           email: form.email.trim(),
           password: form.password,
           options: {
-            data: { full_name: form.name.trim(), phone: form.phone.trim(), role },
+            data: {
+              full_name: form.name.trim(),
+              phone: form.phone.trim(),
+              role,
+              business_name: form.business.trim(),
+              public_name: form.publicName.trim(),
+            },
           },
         })
         if (error) throw error
@@ -131,6 +141,20 @@ function AuthScreen() {
                     <p className="hint">Solo lo ve el administrador. No se muestra al público.</p>
                   )}
                 </label>
+                {role === 'negocio' && (
+                  <label className="field">
+                    <span>Nombre del negocio</span>
+                    <input value={form.business} onChange={set('business')} />
+                    <p className="hint">Es el que verán tus clientes.</p>
+                  </label>
+                )}
+                {role === 'repartidor' && (
+                  <label className="field">
+                    <span>Nombre público</span>
+                    <input value={form.publicName} onChange={set('publicName')} />
+                    <p className="hint">Es el que verán clientes y negocios. Puede ser solo tu nombre de pila.</p>
+                  </label>
+                )}
                 <label className="field">
                   <span>Teléfono{role === 'cliente' ? ' (opcional)' : ''}</span>
                   <input

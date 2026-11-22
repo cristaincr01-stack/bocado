@@ -576,3 +576,101 @@
   color: var(--muted);
   font-size: 14px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Gastos del cliente, historial y ranking del administrador           */
+/* ------------------------------------------------------------------ */
+
+.spend {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 8px;
+  padding: 16px;
+  margin-bottom: 18px;
+  border-radius: 18px;
+  background: var(--turq);
+  color: #fff;
+}
+
+.spend small {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.spend b {
+  font-size: 18px;
+}
+
+.done-card .done-items {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.done-card .sum-line.total {
+  margin-top: 0;
+  padding-top: 10px;
+  font-size: 16px;
+}
+
+.struck {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.adm-stat.static {
+  cursor: default;
+}
+
+.adm-rank {
+  display: grid;
+  gap: 2px;
+  padding: 6px 16px;
+}
+
+.adm-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.adm-rank-row:first-child {
+  border-top: 0;
+}
+
+.adm-rank-row .pos {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--turq) 14%, #fff);
+  color: var(--turq);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.adm-rank-row .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.adm-rank-row .val {
+  text-align: right;
+  font-weight: 700;
+}
+
+.adm-rank-row .val small {
+  display: block;
+  color: var(--muted);
+  font-weight: 500;
+}

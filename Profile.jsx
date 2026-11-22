@@ -257,34 +257,42 @@ export function BusinessProfile({ business, setBusiness }) {
 
 export function CourierProfile({ courier, setCourier }) {
   const [vehicle, setVehicle] = useState(courier.vehicle || VEHICLES[0])
+  const [publicName, setPublicName] = useState(courier.display_name || '')
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
 
   async function save(e) {
     e.preventDefault()
     setMsg(null)
+    if (!publicName.trim()) return setMsg({ type: 'error', text: 'Escribe tu nombre público.' })
     setBusy(true)
-    const { error } = await supabase.from('couriers').update({ vehicle }).eq('id', courier.id)
+    const display_name = publicName.trim()
+    const { error } = await supabase.from('couriers').update({ vehicle, display_name }).eq('id', courier.id)
     setBusy(false)
     if (error) setMsg({ type: 'error', text: 'No pudimos guardar los cambios.' })
     else {
-      setCourier({ ...courier, vehicle })
-      setMsg({ type: 'ok', text: 'Vehículo guardado.' })
+      setCourier({ ...courier, vehicle, display_name })
+      setMsg({ type: 'ok', text: 'Datos guardados.' })
     }
   }
 
   return (
     <form className="card" onSubmit={save}>
       <h3 className="section-title" style={{ marginTop: 0 }}>
-        Mi vehículo
+        Mi perfil de repartidor
       </h3>
+      <label className="field">
+        <span>Nombre público</span>
+        <input value={publicName} onChange={(e) => setPublicName(e.target.value)} />
+        <p className="hint">Es el que ven clientes y negocios.</p>
+      </label>
       <div className="field">
         <span>¿En qué te mueves?</span>
         <Select title="¿En qué te mueves?" value={vehicle} onChange={setVehicle} options={VEHICLES} />
       </div>
       {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
       <button className="btn small" disabled={busy}>
-        {busy ? 'Guardando...' : 'Guardar vehículo'}
+        {busy ? 'Guardando...' : 'Guardar mis datos'}
       </button>
     </form>
   )
