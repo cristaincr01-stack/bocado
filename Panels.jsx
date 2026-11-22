@@ -3,6 +3,7 @@ import { MapPin } from 'lucide-react'
 import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
+import { VerifiedBadge } from './Verified.jsx'
 
 const VERIF = { pendiente: 'En revisión', aprobado: 'Verificado', rechazado: 'Rechazado' }
 const TIER_LABEL = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
@@ -18,7 +19,14 @@ const CATEGORIES = [
 ]
 const VEHICLES = ['Moto', 'Bicicleta', 'Triciclo', 'A pie', 'Carro']
 
-function Badge({ status }) {
+function Badge({ status, tier }) {
+  if (status === 'aprobado' && tier) {
+    return (
+      <span className="badge aprobado" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <VerifiedBadge tier={tier} size={16} /> {VERIF[status]}
+      </span>
+    )
+  }
   return <span className={`badge ${status}`}>{VERIF[status] || status}</span>
 }
 
@@ -177,7 +185,7 @@ export function BusinessPanel({ profile }) {
       <div className="card">
         <div className="row">
           <h3>{business.name}</h3>
-          <Badge status={business.verification_status} />
+          <Badge status={business.verification_status} tier={business.tier} />
         </div>
         <p className="meta">{[business.category, business.address].filter(Boolean).join(' - ')}</p>
         <p className="meta">Nivel {TIER_LABEL[business.tier]}</p>
@@ -312,7 +320,7 @@ export function CourierPanel({ profile }) {
       <div className="card">
         <div className="row">
           <h3>{courier.vehicle}</h3>
-          <Badge status={courier.verification_status} />
+          <Badge status={courier.verification_status} tier={courier.tier} />
         </div>
         <p className="meta">Nivel {TIER_LABEL[courier.tier]}</p>
       </div>
@@ -385,7 +393,7 @@ function VerifyRow({ kind, item, tiers, onSaved }) {
     <div className="card">
       <div className="row">
         <h3>{title}</h3>
-        <Badge status={item.verification_status} />
+        <Badge status={item.verification_status} tier={item.tier} />
       </div>
       <p className="meta">{detail}</p>
       {person && (

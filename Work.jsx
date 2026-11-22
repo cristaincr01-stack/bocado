@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase, STATUS_LABELS } from './lib.js'
 import { money, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
+import { playAlert } from './alert.js'
 import './shop.css'
 
 /* ================================================================== */
@@ -73,12 +74,13 @@ function BusinessOrders({ business }) {
   const [error, setError] = useState('')
   const [notes, setNotes] = useState({})
   const [busyId, setBusyId] = useState(null)
+  const known = useRef(null)
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('orders')
       .select(
-        'id, status, delivery_type, delivery_mode, delivery_address, notes, customer_name, customer_phone, subtotal, delivery_fee, total, courier_id, created_at, order_items(id, product_name, quantity, unit_price)'
+        'id, status, delivery_type, delivery_mode, delivery_address, delivery_lat, delivery_lng, notes, customer_name, customer_phone, subtotal, delivery_fee, total, courier_id, created_at, order_items(id, product_name, quantity, unit_price)'
       )
       .eq('business_id', business.id)
       .order('created_at', { ascending: false })
@@ -86,6 +88,9 @@ function BusinessOrders({ business }) {
     if (err) setError('No pudimos cargar los pedidos.')
     else {
       setError('')
+      if (known.current && data.some((o) => o.status === 'enviado' && !known.current.has(o.id)))
+        playAlert()
+      known.current = new Set(data.map((o) => o.id))
       setOrders(data)
     }
   }, [business.id])
@@ -154,6 +159,16 @@ function BusinessOrders({ business }) {
         {o.delivery_mode === 'repartidor' && o.courier_id && o.status !== 'entregado' && o.status !== 'cancelado' && (
           <p className="meta" style={{ fontWeight: 700 }}>Repartidor asignado</p>
         )}
+        {o.courier_id &&
+          ['confirmado', 'en_fogones', 'listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
+            <div style={{ marginTop: 12 }}>
+              <LiveMap
+                business={business}
+                dest={{ lat: o.delivery_lat, lng: o.delivery_lng }}
+                courierId={o.courier_id}
+              />
+            </div>
+          )}
         {notes[o.id] && <div className="notice" style={{ marginTop: 10, marginBottom: 0 }}>{notes[o.id]}</div>}
 
         <div className="order-actions">
@@ -445,6 +460,7 @@ export function CourierWork({ courier }) {
   const [jobs, setJobs] = useState([])
   const [msg, setMsg] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const knownOffers = useRef(null)
 
   const load = useCallback(async () => {
     const [o, j] = await Promise.all([
@@ -464,7 +480,10 @@ export function CourierWork({ courier }) {
         .in('status', ACTIVE)
         .order('created_at'),
     ])
-    setOffers((o.data || []).filter((x) => x.order))
+    const list = (o.data || []).filter((x) => x.order)
+    if (knownOffers.current && list.some((x) => !knownOffers.current.has(x.id))) playAlert()
+    knownOffers.current = new Set(list.map((x) => x.id))
+    setOffers(list)
     setJobs(j.data || [])
   }, [courier.id])
 

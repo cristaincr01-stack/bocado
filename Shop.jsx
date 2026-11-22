@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin } from 'lucide-react'
 import { supabase, STATUS_LABELS } from './lib.js'
 import { money, getPosition, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
+import { VerifiedBadge } from './Verified.jsx'
 import './shop.css'
 
 const STEPS_PICKUP = ['enviado', 'confirmado', 'en_fogones', 'listo_para_salir', 'entregado']
@@ -104,7 +105,7 @@ function BusinessList({ onOpen }) {
   useEffect(() => {
     supabase
       .from('businesses')
-      .select('id, name, category, address, is_open, courier_fee')
+      .select('id, name, category, address, is_open, courier_fee, tier')
       .eq('verification_status', 'aprobado')
       .order('name')
       .then(({ data, error: err }) => {
@@ -132,7 +133,9 @@ function BusinessList({ onOpen }) {
             onClick={() => onOpen(b)}
           >
             <div className="row">
-              <h3>{b.name}</h3>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {b.name} <VerifiedBadge tier={b.tier} size={18} />
+              </h3>
               <span className={`badge ${b.is_open ? 'aprobado' : ''}`}>
                 {b.is_open ? 'Abierto' : 'Cerrado'}
               </span>
@@ -185,7 +188,9 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
         <ArrowLeft size={18} /> Negocios
       </button>
       <div className="greeting" style={{ marginBottom: 14 }}>
-        <h2 style={{ fontSize: 24 }}>{business.name}</h2>
+        <h2 style={{ fontSize: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {business.name} <VerifiedBadge tier={business.tier} size={22} />
+        </h2>
         <p>{[business.category, business.address].filter(Boolean).join(' - ')}</p>
       </div>
 
@@ -416,7 +421,7 @@ function MyOrders({ notice }) {
     const { data, error: err } = await supabase
       .from('orders')
       .select(
-        'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, created_at, business:businesses(name, lat, lng), order_items(id, product_name, quantity)'
+        'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, created_at, business:businesses(name, tier, lat, lng), order_items(id, product_name, quantity)'
       )
       .eq('customer_id', uid)
       .order('created_at', { ascending: false })
@@ -461,7 +466,10 @@ function MyOrders({ notice }) {
           return (
             <div className="card" key={o.id}>
               <div className="row">
-                <h3>{o.business?.name || 'Negocio'}</h3>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {o.business?.name || 'Negocio'}
+                  {o.business?.tier && <VerifiedBadge tier={o.business.tier} size={16} />}
+                </h3>
                 <span className={`badge ${o.status === 'cancelado' ? 'rechazado' : o.status === 'entregado' ? 'aprobado' : ''}`}>
                   {STATUS_LABELS[o.status]}
                 </span>
