@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin } from 'lucide-react'
 import { supabase, STATUS_LABELS } from './lib.js'
 import { money, getPosition, useRealtime } from './utils.js'
+import { LiveMap } from './Map.jsx'
 import './shop.css'
 
 const STEPS_PICKUP = ['enviado', 'confirmado', 'en_fogones', 'listo_para_salir', 'entregado']
@@ -415,7 +416,7 @@ function MyOrders({ notice }) {
     const { data, error: err } = await supabase
       .from('orders')
       .select(
-        'id, status, delivery_type, delivery_mode, total, created_at, business:businesses(name), order_items(id, product_name, quantity)'
+        'id, status, delivery_type, delivery_mode, courier_id, total, created_at, business:businesses(name, lat, lng), order_items(id, product_name, quantity)'
       )
       .eq('customer_id', uid)
       .order('created_at', { ascending: false })
@@ -489,6 +490,13 @@ function MyOrders({ notice }) {
                   ))}
                 </ul>
               )}
+
+              {o.courier_id &&
+                ['listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
+                  <div style={{ marginTop: 12 }}>
+                    <LiveMap business={o.business} courierId={o.courier_id} />
+                  </div>
+                )}
 
               {o.status === 'enviado' && (
                 <div className="order-actions">
