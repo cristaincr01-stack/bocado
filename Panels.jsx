@@ -4,7 +4,7 @@ import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
 import { VerifiedBadge } from './Verified.jsx'
-import { MyProfile, CourierProfile, SubscriptionBox, PaymentsAdmin } from './Profile.jsx'
+import { MyProfile, CourierProfile, SubscriptionBox, PaymentsAdmin, PricingAdmin } from './Profile.jsx'
 
 const VERIF = { pendiente: 'En revisión', aprobado: 'Verificado', rechazado: 'Rechazado' }
 const TIER_LABEL = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
@@ -542,9 +542,13 @@ export function AdminPanel() {
         <button aria-pressed={section === 'pagos'} onClick={() => setSection('pagos')}>
           Pagos
         </button>
+        <button aria-pressed={section === 'precios'} onClick={() => setSection('precios')}>
+          Precios
+        </button>
       </div>
 
       {section === 'pagos' && <PaymentsAdmin />}
+      {section === 'precios' && <PricingAdmin />}
       {section === 'solicitudes' && (
         <>
       <div className="tabs">

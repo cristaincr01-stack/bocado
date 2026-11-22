@@ -652,3 +652,170 @@ export function PaymentsAdmin() {
     </>
   )
 }
+
+/* ------------------------------------------------------------------ */
+/* Administrador: precios de planes y datos de cobro                   */
+/* ------------------------------------------------------------------ */
+
+export function PricingAdmin() {
+  const [plans, setPlans] = useState(null)
+  const [methods, setMethods] = useState(null)
+  const [edits, setEdits] = useState({})
+  const [msg, setMsg] = useState(null)
+  const [busyKey, setBusyKey] = useState(null)
+
+  const load = useCallback(async () => {
+    const [p, m] = await Promise.all([
+      supabase.from('plans').select('kind, tier, price_cup, price_usd').order('kind').order('tier'),
+      supabase.from('payment_methods').select('code, label, currency, details, active, sort').order('sort'),
+    ])
+    if (p.error || m.error) setMsg({ type: 'error', text: 'No pudimos cargar los precios.' })
+    setPlans(p.data || [])
+    setMethods(m.data || [])
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const setEdit = (key, field, value) =>
+    setEdits((cur) => ({ ...cur, [key]: { ...(cur[key] || {}), [field]: value } }))
+
+  const val = (key, field, original) =>
+    edits[key] && edits[key][field] !== undefined ? edits[key][field] : original ?? ''
+
+  const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
+
+  async function savePlan(p) {
+    const key = `${p.kind}-${p.tier}`
+    const cup = num(val(key, 'price_cup', p.price_cup))
+    const usd = num(val(key, 'price_usd', p.price_usd))
+    if ((cup !== null && !(cup >= 0)) || (usd !== null && !(usd >= 0)))
+      return setMsg({ type: 'error', text: 'Escribe precios válidos.' })
+    setBusyKey(key)
+    setMsg(null)
+    const { error } = await supabase.rpc('admin_set_plan_price', {
+      p_kind: p.kind,
+      p_tier: p.tier,
+      p_price_cup: cup,
+      p_price_usd: usd,
+    })
+    setBusyKey(null)
+    if (error) setMsg({ type: 'error', text: 'No se pudo guardar el precio.' })
+    else {
+      setMsg({ type: 'ok', text: `Precio guardado: ${p.kind} ${TIER_NAME[p.tier]}.` })
+      setEdits((cur) => ({ ...cur, [key]: undefined }))
+      load()
+    }
+  }
+
+  async function saveMethod(m) {
+    const key = `m-${m.code}`
+    setBusyKey(key)
+    setMsg(null)
+    const { error } = await supabase.rpc('admin_set_payment_method', {
+      p_code: m.code,
+      p_details: String(val(key, 'details', m.details)).trim() || null,
+      p_active: val(key, 'active', m.active) === true,
+    })
+    setBusyKey(null)
+    if (error) setMsg({ type: 'error', text: 'No se pudo guardar el método de pago.' })
+    else {
+      setMsg({ type: 'ok', text: `${METHOD_LABEL[m.code] || m.label} guardado.` })
+      setEdits((cur) => ({ ...cur, [key]: undefined }))
+      load()
+    }
+  }
+
+  if (plans === null || methods === null) return <p>Cargando...</p>
+
+  const groups = [
+    ['negocio', 'Planes de negocios'],
+    ['repartidor', 'Planes de repartidores'],
+  ]
+
+  return (
+    <div className="stack">
+      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+
+      {groups.map(([kind, title]) => (
+        <div key={kind}>
+          <h3 className="section-title">{title}</h3>
+          <div className="list">
+            {plans
+              .filter((p) => p.kind === kind)
+              .map((p) => {
+                const key = `${p.kind}-${p.tier}`
+                return (
+                  <div className="card" key={key}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <VerifiedBadge tier={p.tier} size={18} /> {TIER_NAME[p.tier]}
+                    </h3>
+                    <label className="field">
+                      <span>Precio en CUP</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        value={val(key, 'price_cup', p.price_cup)}
+                        onChange={(e) => setEdit(key, 'price_cup', e.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Precio en USD</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        value={val(key, 'price_usd', p.price_usd)}
+                        onChange={(e) => setEdit(key, 'price_usd', e.target.value)}
+                      />
+                    </label>
+                    <button className="btn small" disabled={busyKey === key} onClick={() => savePlan(p)}>
+                      {busyKey === key ? 'Guardando...' : 'Guardar precio'}
+                    </button>
+                  </div>
+                )
+              })}
+          </div>
+        </div>
+      ))}
+
+      <h3 className="section-title">Métodos de pago</h3>
+      <p className="hint">
+        Lo que escribas aquí lo ven los usuarios cuando van a pagar: tarjeta, usuario o dirección.
+      </p>
+      <div className="list">
+        {methods.map((m) => {
+          const key = `m-${m.code}`
+          return (
+            <div className="card" key={m.code}>
+              <h3>
+                {METHOD_LABEL[m.code] || m.label} ({m.currency})
+              </h3>
+              <label className="field">
+                <span>Datos para cobrar</span>
+                <textarea
+                  rows={4}
+                  value={val(key, 'details', m.details)}
+                  onChange={(e) => setEdit(key, 'details', e.target.value)}
+                />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={val(key, 'active', m.active) === true}
+                  onChange={(e) => setEdit(key, 'active', e.target.checked)}
+                />
+                <span>Disponible para pagar</span>
+              </label>
+              <button className="btn small" disabled={busyKey === key} onClick={() => saveMethod(m)}>
+                {busyKey === key ? 'Guardando...' : 'Guardar método'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
