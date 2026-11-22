@@ -674,3 +674,131 @@
   color: var(--muted);
   font-weight: 500;
 }
+
+/* ------------------------------------------------------------------ */
+/* Herramientas, promociones, agotado y gastos                         */
+/* ------------------------------------------------------------------ */
+
+.spend {
+  grid-template-columns: repeat(3, 1fr);
+  align-items: start;
+}
+
+.spend > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.spend small {
+  margin: 0;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.spend b {
+  line-height: 1.2;
+}
+
+.card.soldout {
+  opacity: 0.65;
+}
+
+.card.soldout h3 {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.discount-line {
+  color: #1c7a4f;
+  font-weight: 700;
+}
+
+.coupon-box {
+  margin-bottom: 16px;
+}
+
+.coupon-row {
+  display: flex;
+  gap: 8px;
+}
+
+.coupon-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: 0.05em;
+}
+
+.coupon-row .btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.loyalty-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: #fff8e6;
+  border: 1.5px solid var(--mango);
+  color: #3d2b00;
+}
+
+.loyalty-banner div {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tool.locked {
+  opacity: 0.7;
+}
+
+.tool-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--turq) 14%, #fff);
+  color: var(--turq);
+}
+
+.tool-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-body h3 {
+  margin: 0 0 2px;
+  font-size: 16px;
+}
+
+.tool-body .meta {
+  margin: 0;
+}
+
+.tool-side {
+  flex: 0 0 auto;
+}
+
+.tool-side .btn {
+  width: auto;
+}

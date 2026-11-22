@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike, Users, PackageCheck } from 'lucide-react'
+import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike, Users, PackageCheck, User, Wrench } from 'lucide-react'
+import { TierTools } from './Tools.jsx'
 import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
 import { VerifiedBadge } from './Verified.jsx'
-import { Select } from './ui.jsx'
+import { Select, PillNav, SegNav } from './ui.jsx'
 import { money } from './utils.js'
 import { MyProfile, CourierProfile, SubscriptionBox, PaymentsAdmin, PricingAdmin } from './Profile.jsx'
 
@@ -262,14 +263,15 @@ function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
   const [tab, setTab] = useState('entregas')
   return (
     <>
-      <div className="tabs">
-        <button aria-pressed={tab === 'entregas'} onClick={() => setTab('entregas')}>
-          Entregas
-        </button>
-        <button aria-pressed={tab === 'perfil'} onClick={() => setTab('perfil')}>
-          Mi perfil
-        </button>
-      </div>
+      <PillNav
+        items={[
+          { id: 'entregas', label: 'Entregas', Icon: Bike },
+          { id: 'herramientas', label: 'Herramientas', Icon: Wrench },
+          { id: 'perfil', label: 'Mi perfil', Icon: User },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
       {tab === 'entregas' && (
         <>
           <button
@@ -287,6 +289,9 @@ function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
           {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
           <CourierWork courier={courier} />
         </>
+      )}
+      {tab === 'herramientas' && (
+        <TierTools kind="repartidor" tier={courier.tier} onUpgrade={() => setTab('perfil')} />
       )}
       {tab === 'perfil' && (
         <div className="stack">
@@ -598,14 +603,11 @@ export function AdminPanel() {
 
   return (
     <>
-      <nav className="adm-nav" aria-label="Administración">
-        {ADMIN_SECTIONS.map(([id, label, Icon]) => (
-          <button key={id} aria-pressed={section === id} onClick={() => go(id)}>
-            <Icon size={18} /> {label}
-            {badgeFor(id) > 0 && <span className="adm-dot">{badgeFor(id)}</span>}
-          </button>
-        ))}
-      </nav>
+      <PillNav
+        items={ADMIN_SECTIONS.map(([id, label, Icon]) => ({ id, label, Icon, badge: badgeFor(id) }))}
+        value={section}
+        onChange={(id) => go(id)}
+      />
 
       {error && <div className="msg error">{error}</div>}
 
@@ -694,13 +696,11 @@ export function AdminPanel() {
 
       {section === 'solicitudes' && (
         <>
-          <div className="adm-seg">
-            {['pendiente', 'aprobado', 'rechazado'].map((s) => (
-              <button key={s} aria-pressed={tab === s} onClick={() => setTab(s)}>
-                {VERIF[s]} ({count(s)})
-              </button>
-            ))}
-          </div>
+          <SegNav
+            items={['pendiente', 'aprobado', 'rechazado'].map((s) => ({ id: s, label: `${VERIF[s]} (${count(s)})` }))}
+            value={tab}
+            onChange={setTab}
+          />
 
           {bList.length === 0 && cList.length === 0 && (
             <div className="empty">

@@ -188,3 +188,32 @@ export const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const h12 = h % 12 === 0 ? 12 : h % 12
   return { value: `${String(h).padStart(2, '0')}:${m}`, label: `${h12}:${m} ${h < 12 ? 'am' : 'pm'}` }
 })
+
+/* ------------------------------------------------------------------ */
+/* Navegación: principal (píldoras con icono) y secundaria (segmentada) */
+/* ------------------------------------------------------------------ */
+
+export function PillNav({ items, value, onChange }) {
+  return (
+    <nav className="adm-nav" aria-label="Secciones">
+      {items.map(({ id, label, Icon, badge }) => (
+        <button key={id} aria-pressed={value === id} onClick={() => onChange(id)}>
+          {Icon && <Icon size={18} />} {label}
+          {badge > 0 && <span className="adm-dot">{badge}</span>}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+export function SegNav({ items, value, onChange }) {
+  return (
+    <div className="adm-seg">
+      {items.map(({ id, label }) => (
+        <button key={id} aria-pressed={value === id} onClick={() => onChange(id)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}

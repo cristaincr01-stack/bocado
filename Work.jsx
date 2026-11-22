@@ -4,7 +4,10 @@ import { money, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
 import { playAlert } from './alert.js'
 import { MyProfile, BusinessProfile, SubscriptionBox } from './Profile.jsx'
-import { Select, TIME_OPTIONS, useConfirm } from './ui.jsx'
+import { Select, TIME_OPTIONS, useConfirm, PillNav, SegNav } from './ui.jsx'
+import { CouponsManager, LoyaltyManager } from './Promos.jsx'
+import { TierTools } from './Tools.jsx'
+import { ClipboardList, UtensilsCrossed, Wrench, UserCog } from 'lucide-react'
 import './shop.css'
 
 /* ================================================================== */
@@ -13,30 +16,67 @@ import './shop.css'
 
 export function BusinessDashboard({ business, setBusiness }) {
   const [tab, setTab] = useState('pedidos')
-  const tabs = [
-    ['pedidos', 'Pedidos'],
-    ['menu', 'Menú'],
-    ['negocio', 'Ajustes'],
-    ['perfil', 'Mi perfil'],
-  ]
+  const [account, setAccount] = useState('ajustes')
+  const [tool, setTool] = useState(null)
+
+  function openTool(id) {
+    if (id === 'cupones' || id === 'habitual') setTool(id)
+    else if (id === 'horario') {
+      setAccount('ajustes')
+      setTab('cuenta')
+    } else if (id === 'agotados') setTab('menu')
+  }
+
+  function upgrade() {
+    setAccount('perfil')
+    setTab('cuenta')
+  }
+
   return (
     <>
-      <div className="tabs">
-        {tabs.map(([id, label]) => (
-          <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <PillNav
+        items={[
+          { id: 'pedidos', label: 'Pedidos', Icon: ClipboardList },
+          { id: 'menu', label: 'Menú', Icon: UtensilsCrossed },
+          { id: 'herramientas', label: 'Herramientas', Icon: Wrench },
+          { id: 'cuenta', label: 'Cuenta', Icon: UserCog },
+        ]}
+        value={tab}
+        onChange={(id) => {
+          setTool(null)
+          setTab(id)
+        }}
+      />
       {tab === 'pedidos' && <BusinessOrders business={business} />}
       {tab === 'menu' && <MenuManager business={business} />}
-      {tab === 'negocio' && <BusinessSettings business={business} setBusiness={setBusiness} />}
-      {tab === 'perfil' && (
-        <div className="stack">
-          <MyProfile role="negocio" />
-          <BusinessProfile business={business} setBusiness={setBusiness} />
-          <SubscriptionBox kind="negocio" />
-        </div>
+      {tab === 'herramientas' && !tool && (
+        <TierTools kind="negocio" tier={business.tier} onOpen={openTool} onUpgrade={upgrade} />
+      )}
+      {tab === 'herramientas' && tool === 'cupones' && (
+        <CouponsManager business={business} onBack={() => setTool(null)} />
+      )}
+      {tab === 'herramientas' && tool === 'habitual' && (
+        <LoyaltyManager business={business} onBack={() => setTool(null)} />
+      )}
+      {tab === 'cuenta' && (
+        <>
+          <SegNav
+            items={[
+              { id: 'ajustes', label: 'Ajustes' },
+              { id: 'perfil', label: 'Mi perfil' },
+            ]}
+            value={account}
+            onChange={setAccount}
+          />
+          {account === 'ajustes' && <BusinessSettings business={business} setBusiness={setBusiness} />}
+          {account === 'perfil' && (
+            <div className="stack">
+              <MyProfile role="negocio" />
+              <BusinessProfile business={business} setBusiness={setBusiness} />
+              <SubscriptionBox kind="negocio" />
+            </div>
+          )}
+        </>
       )}
     </>
   )
@@ -90,7 +130,7 @@ function BusinessOrders({ business }) {
     const { data, error: err } = await supabase
       .from('orders')
       .select(
-        'id, status, delivery_type, delivery_mode, delivery_address, delivery_lat, delivery_lng, notes, customer_name, customer_phone, subtotal, delivery_fee, total, courier_id, created_at, order_items(id, product_name, quantity, unit_price)'
+        'id, status, delivery_type, delivery_mode, delivery_address, delivery_lat, delivery_lng, notes, customer_name, customer_phone, subtotal, delivery_fee, discount, coupon_code, reward_note, total, courier_id, created_at, order_items(id, product_name, quantity, unit_price)'
       )
       .eq('business_id', business.id)
       .order('created_at', { ascending: false })
@@ -165,6 +205,13 @@ function BusinessOrders({ business }) {
         </ul>
         {o.notes && <p className="meta">Nota: {o.notes}</p>}
         <p className="meta">{deliveryText(o)}</p>
+        {Number(o.discount) > 0 && (
+          <p className="meta discount-line">
+            Descuento: -{money(o.discount)}
+            {o.coupon_code ? ` (código ${o.coupon_code})` : ''}
+          </p>
+        )}
+        {o.reward_note && <p className="meta discount-line">Cliente habitual: {o.reward_note}</p>}
         <p className="meta">
           Total: {money(o.total)}
           {o.delivery_fee > 0 ? ` (envío ${money(o.delivery_fee)})` : ''}
@@ -338,6 +385,8 @@ function MenuManager({ business }) {
     load()
   }, [load])
 
+  const atLimit = business.tier === 'basico' && items && items.length >= 30
+
   async function toggleAvailable(p) {
     await supabase.from('products').update({ available: !p.available }).eq('id', p.id)
     load()
@@ -368,9 +417,21 @@ function MenuManager({ business }) {
           onCancel={() => setEditing(null)}
         />
       ) : (
-        <button className="btn" style={{ marginBottom: 14 }} onClick={() => setEditing('new')}>
-          Agregar producto
-        </button>
+        <>
+          <button
+            className="btn"
+            style={{ marginBottom: 14 }}
+            disabled={atLimit}
+            onClick={() => setEditing('new')}
+          >
+            Agregar producto
+          </button>
+          {atLimit && (
+            <div className="notice">
+              Tu plan Básico permite hasta 30 productos. Con Pro tienes productos ilimitados.
+            </div>
+          )}
+        </>
       )}
 
       {items === null && !error && <p>Cargando...</p>}
@@ -383,7 +444,7 @@ function MenuManager({ business }) {
 
       <div className="list">
         {(items || []).map((p) => (
-          <div className="card" key={p.id}>
+          <div className={`card ${p.available ? '' : 'soldout'}`} key={p.id}>
             <div className="row">
               <h3>{p.name}</h3>
               <b>{money(p.price)}</b>
@@ -397,8 +458,11 @@ function MenuManager({ business }) {
               <button className="btn small secondary" onClick={() => setEditing(p)}>
                 Editar
               </button>
-              <button className="btn small secondary" onClick={() => toggleAvailable(p)}>
-                {p.available ? 'Marcar agotado' : 'Marcar disponible'}
+              <button
+                className={`btn small ${p.available ? 'secondary' : ''}`}
+                onClick={() => toggleAvailable(p)}
+              >
+                {p.available ? 'Marcar agotado' : 'Volver a poner disponible'}
               </button>
               <button className="btn small danger" onClick={() => remove(p)}>
                 Eliminar

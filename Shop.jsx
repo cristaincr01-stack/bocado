@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin, CheckCircle2, Store, ClipboardList, User, Heart } from 'lucide-react'
 import { supabase, STATUS_LABELS } from './lib.js'
 import { money, getPosition, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
 import { VerifiedBadge } from './Verified.jsx'
 import { MyProfile } from './Profile.jsx'
+import { PillNav } from './ui.jsx'
 import './shop.css'
 
 const STEPS_PICKUP = ['enviado', 'confirmado', 'en_fogones', 'listo_para_salir', 'entregado']
@@ -48,33 +49,28 @@ export function CustomerApp() {
     setNotice('')
   }
 
-  function placed() {
+  function placed(extra) {
     setCart({})
     setCheckout(false)
     setBusiness(null)
     setTab('pedidos')
-    setNotice('Pedido enviado. Aquí puedes seguirlo paso a paso.')
+    setNotice(extra ? `Pedido enviado. ${extra}` : 'Pedido enviado. Aquí puedes seguirlo paso a paso.')
   }
 
   return (
     <>
-      <div className="tabs">
-        <button aria-pressed={tab === 'negocios'} onClick={() => setTab('negocios')}>
-          Negocios
-        </button>
-        <button
-          aria-pressed={tab === 'pedidos'}
-          onClick={() => {
-            setTab('pedidos')
-            setNotice('')
-          }}
-        >
-          Mis pedidos
-        </button>
-        <button aria-pressed={tab === 'perfil'} onClick={() => setTab('perfil')}>
-          Mi perfil
-        </button>
-      </div>
+      <PillNav
+        items={[
+          { id: 'negocios', label: 'Negocios', Icon: Store },
+          { id: 'pedidos', label: 'Mis pedidos', Icon: ClipboardList },
+          { id: 'perfil', label: 'Mi perfil', Icon: User },
+        ]}
+        value={tab}
+        onChange={(id) => {
+          setTab(id)
+          if (id === 'pedidos') setNotice('')
+        }}
+      />
 
       {tab === 'negocios' && !business && <BusinessList onOpen={openBusiness} />}
       {tab === 'negocios' && business && !checkout && (
@@ -115,9 +111,39 @@ function BusinessList({ onOpen }) {
       .order('name')
       .then(({ data, error: err }) => {
         if (err) setError('No pudimos cargar los negocios. Inténtalo de nuevo.')
-        else setItems(data)
+        else {
+          const rank = { premium: 2, pro: 1, basico: 0 }
+          setItems(
+            data
+              .slice()
+              .sort(
+                (x, y) =>
+                  Number(y.is_open) - Number(x.is_open) ||
+                  (rank[y.tier] || 0) - (rank[x.tier] || 0) ||
+                  x.name.localeCompare(y.name)
+              )
+          )
+        }
       })
   }, [])
+
+  const featured = (items || []).filter((b) => b.tier === 'premium' && b.is_open)
+  const card = (b) => (
+    <button
+      key={b.id}
+      className="card"
+      style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+      onClick={() => onOpen(b)}
+    >
+      <div className="row">
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {b.name} <VerifiedBadge tier={b.tier} size={18} />
+        </h3>
+        <span className={`badge ${b.is_open ? 'aprobado' : ''}`}>{b.is_open ? 'Abierto' : 'Cerrado'}</span>
+      </div>
+      <p className="meta">{[b.category, b.address].filter(Boolean).join(' - ')}</p>
+    </button>
+  )
 
   return (
     <>
@@ -129,33 +155,29 @@ function BusinessList({ onOpen }) {
           Estamos sumando los primeros. Vuelve pronto.
         </div>
       )}
-      <div className="list">
-        {(items || []).map((b) => (
-          <button
-            key={b.id}
-            className="card"
-            style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
-            onClick={() => onOpen(b)}
-          >
-            <div className="row">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {b.name} <VerifiedBadge tier={b.tier} size={18} />
-              </h3>
-              <span className={`badge ${b.is_open ? 'aprobado' : ''}`}>
-                {b.is_open ? 'Abierto' : 'Cerrado'}
-              </span>
-            </div>
-            <p className="meta">{[b.category, b.address].filter(Boolean).join(' - ')}</p>
-          </button>
-        ))}
-      </div>
+      {featured.length > 0 && (
+        <>
+          <h3 className="section-title" style={{ marginTop: 0 }}>Destacados</h3>
+          <div className="list" style={{ marginBottom: 18 }}>{featured.map(card)}</div>
+          <h3 className="section-title">Todos los negocios</h3>
+        </>
+      )}
+      <div className="list">{(items || []).map(card)}</div>
     </>
   )
 }
 
 /* ------------------------------------------------------------------ */
 
+function loyaltyReward(l) {
+  if (!l) return ''
+  if (l.kind === 'porcentaje') return `${Number(l.value)}% de descuento`
+  if (l.kind === 'monto') return `${money(l.value)} de descuento`
+  return l.text || 'un regalo'
+}
+
 function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
+  const [loyalty, setLoyalty] = useState(null)
   const [products, setProducts] = useState(null)
   const [error, setError] = useState('')
 
@@ -164,12 +186,12 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
       .from('products')
       .select('*')
       .eq('business_id', business.id)
-      .eq('available', true)
       .order('created_at')
       .then(({ data, error: err }) => {
         if (err) setError('No pudimos cargar el menú.')
-        else setProducts(data)
+        else setProducts(data.slice().sort((x, y) => Number(y.available) - Number(x.available)))
       })
+    supabase.rpc('loyalty_status', { p_business: business.id }).then(({ data }) => setLoyalty(data || null))
   }, [business.id])
 
   const add = (p) =>
@@ -202,6 +224,28 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
       {!business.is_open && (
         <div className="notice">Este negocio está cerrado ahora. Puedes ver el menú, pero no pedir.</div>
       )}
+      {loyalty && (
+        <div className="loyalty-banner">
+          <Heart size={20} />
+          <div>
+            {loyalty.pending > 0 ? (
+              <>
+                <b>Tienes un premio disponible</b>
+                <span>Úsalo en este pedido: {loyaltyReward(loyalty)}.</span>
+              </>
+            ) : (
+              <>
+                <b>Cliente habitual</b>
+                <span>
+                  Te faltan {Math.max(loyalty.every - loyalty.completed, 0)}{' '}
+                  {loyalty.every - loyalty.completed === 1 ? 'pedido' : 'pedidos'} para ganar{' '}
+                  {loyaltyReward(loyalty)}.
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {error && <div className="msg error">{error}</div>}
       {products === null && !error && <p>Cargando menú...</p>}
       {products && products.length === 0 && (
@@ -213,15 +257,16 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
 
       <div className="list">
         {(products || []).map((p) => (
-          <div className="card product" key={p.id}>
+          <div className={`card product ${p.available ? '' : 'soldout'}`} key={p.id}>
             <div className="info">
               <h3>{p.name}</h3>
               {p.description && <p className="meta">{p.description}</p>}
               <p className="price">{money(p.price)}</p>
               {p.has_delivery && <span className="badge propio">Envío incluido</span>}
+              {!p.available && <span className="badge agotado">Agotado</span>}
             </div>
             <div className="qty">
-              {cart[p.id] && (
+              {p.available && cart[p.id] && (
                 <>
                   <button aria-label="Quitar uno" onClick={() => remove(p)}>
                     <Minus size={18} />
@@ -229,14 +274,16 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
                   <b>{cart[p.id].qty}</b>
                 </>
               )}
-              <button
-                className="add"
-                aria-label="Agregar uno"
-                onClick={() => add(p)}
-                disabled={!business.is_open}
-              >
-                <Plus size={18} />
-              </button>
+              {p.available && (
+                <button
+                  className="add"
+                  aria-label="Agregar uno"
+                  onClick={() => add(p)}
+                  disabled={!business.is_open}
+                >
+                  <Plus size={18} />
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -271,6 +318,22 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
   const [pos, setPos] = useState(null)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [code, setCode] = useState('')
+  const [applied, setApplied] = useState(null)
+  const [couponMsg, setCouponMsg] = useState(null)
+  const [loyalty, setLoyalty] = useState(null)
+  const [useReward, setUseReward] = useState(false)
+
+  useEffect(() => {
+    supabase.rpc('loyalty_status', { p_business: business.id }).then(({ data }) => {
+      setLoyalty(data || null)
+      if (data && data.pending > 0) setUseReward(true)
+    })
+  }, [business.id])
+
+  useEffect(() => {
+    setApplied(null)
+  }, [subtotal])
 
   useEffect(() => {
     setName((v) => v || me.name)
@@ -279,7 +342,34 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
 
   const courierFee = Number(business.courier_fee || 0)
   const fee = type === 'domicilio' && !allOwnDelivery ? courierFee : 0
-  const total = subtotal + fee
+  const couponDiscount = applied ? Number(applied.discount) : 0
+  const afterCoupon = Math.max(subtotal - couponDiscount, 0)
+  const rewardOn = useReward && loyalty && loyalty.pending > 0
+  let rewardDiscount = 0
+  if (rewardOn && loyalty.kind === 'porcentaje')
+    rewardDiscount = Math.round(afterCoupon * Number(loyalty.value)) / 100
+  if (rewardOn && loyalty.kind === 'monto') rewardDiscount = Math.min(Number(loyalty.value), afterCoupon)
+  const discount = couponDiscount + rewardDiscount
+  const total = Math.max(subtotal - discount, 0) + fee
+
+  async function applyCoupon() {
+    setCouponMsg(null)
+    if (!code.trim()) return
+    const { data, error } = await supabase.rpc('check_coupon', {
+      p_business: business.id,
+      p_code: code,
+      p_subtotal: subtotal,
+    })
+    if (error) {
+      setApplied(null)
+      return setCouponMsg({
+        type: 'error',
+        text: error.message && error.message.length < 100 ? error.message : 'No se pudo aplicar el código.',
+      })
+    }
+    setApplied({ code: code.trim().toUpperCase(), discount: data.discount })
+    setCouponMsg({ type: 'ok', text: `Código aplicado: -${money(data.discount)}` })
+  }
 
   async function useMyLocation() {
     setMsg(null)
@@ -299,7 +389,7 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
       return setMsg({ type: 'error', text: 'Escribe un teléfono para que te puedan contactar.' })
 
     setBusy(true)
-    const { error } = await supabase.rpc('place_order', {
+    const { data: placedData, error } = await supabase.rpc('place_order', {
       p_business: business.id,
       p_type: type,
       p_address: address,
@@ -310,14 +400,40 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
       p_lat: type === 'domicilio' && pos ? pos.lat : null,
       p_lng: type === 'domicilio' && pos ? pos.lng : null,
     })
-    setBusy(false)
 
     if (error) {
+      setBusy(false)
       const text = error.message && error.message.length < 100 ? error.message : 'No pudimos enviar tu pedido. Inténtalo de nuevo.'
-      setMsg({ type: 'error', text })
-    } else {
-      onPlaced()
+      return setMsg({ type: 'error', text })
     }
+
+    let extra = ''
+    if (applied || rewardOn) {
+      let orderId = typeof placedData === 'string' ? placedData : placedData?.id || placedData?.[0]?.id || null
+      if (!orderId) {
+        const { data: u } = await supabase.auth.getUser()
+        const { data: last } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('customer_id', u.user.id)
+          .eq('business_id', business.id)
+          .eq('status', 'enviado')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        orderId = last?.id || null
+      }
+      if (orderId) {
+        const { error: dErr } = await supabase.rpc('apply_order_discounts', {
+          p_order: orderId,
+          p_code: applied ? applied.code : null,
+          p_use_reward: !!rewardOn,
+        })
+        if (dErr) extra = 'No pudimos aplicar el descuento; consúltalo con el negocio.'
+      }
+    }
+    setBusy(false)
+    onPlaced(extra)
   }
 
   return (
@@ -354,10 +470,42 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
                   : 'Sin costo'}
           </span>
         </div>
+        {discount > 0 && (
+          <div className="sum-line discount-line">
+            <span>Descuento</span>
+            <span>-{money(discount)}</span>
+          </div>
+        )}
         <div className="sum-line total">
           <span>Total</span>
           <span>{money(total)}</span>
         </div>
+      </div>
+
+      <div className="coupon-box">
+        <div className="coupon-row">
+          <input
+            value={code}
+            onChange={(e) => {
+              setCode(e.target.value.toUpperCase())
+              setApplied(null)
+              setCouponMsg(null)
+            }}
+            placeholder="Código de descuento"
+            autoCapitalize="characters"
+            aria-label="Código de descuento"
+          />
+          <button type="button" className="btn small secondary" onClick={applyCoupon}>
+            Aplicar
+          </button>
+        </div>
+        {couponMsg && <div className={`msg ${couponMsg.type}`}>{couponMsg.text}</div>}
+        {loyalty && loyalty.pending > 0 && (
+          <label className="check" style={{ marginTop: 10 }}>
+            <input type="checkbox" checked={useReward} onChange={(e) => setUseReward(e.target.checked)} />
+            <span>Usar mi premio de cliente habitual: {loyaltyReward(loyalty)}</span>
+          </label>
+        )}
       </div>
 
       <div className="segmented">
@@ -432,7 +580,7 @@ function MyOrders({ notice }) {
       supabase
         .from('orders')
         .select(
-          'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, created_at, business:businesses(name, tier, lat, lng), order_items(id, product_name, quantity)'
+          'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, discount, coupon_code, reward_note, created_at, business:businesses(name, tier, lat, lng), order_items(id, product_name, quantity)'
         )
         .eq('customer_id', uid)
         .order('created_at', { ascending: false })
@@ -494,6 +642,7 @@ function MyOrders({ notice }) {
             </li>
           ))}
         </ul>
+        {Number(o.discount) > 0 && <p className="meta discount-line">Descuento: -{money(o.discount)}</p>}
         <p className="meta">Total: {money(o.total)}</p>
 
         <ul className="steps">
@@ -551,6 +700,13 @@ function MyOrders({ notice }) {
         <p className="done-items">
           {o.order_items.map((i) => `${i.quantity} × ${i.product_name}`).join(', ')}
         </p>
+        {Number(o.discount) > 0 && (
+          <div className="sum-line discount-line">
+            <span>Descuento{o.coupon_code ? ` (${o.coupon_code})` : ''}</span>
+            <span>-{money(o.discount)}</span>
+          </div>
+        )}
+        {o.reward_note && <p className="meta discount-line">Premio cliente habitual: {o.reward_note}</p>}
         <div className="sum-line total">
           <span>Total</span>
           <span className={delivered ? '' : 'struck'}>{money(o.total)}</span>
@@ -575,7 +731,7 @@ function MyOrders({ notice }) {
             <b>{money(spent.month)}</b>
           </div>
           <div>
-            <small>Pedidos completados</small>
+            <small>Completados</small>
             <b>{spent.count}</b>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { MapPin } from 'lucide-react'
 import { supabase } from './lib.js'
 import { getPosition } from './utils.js'
 import { VerifiedBadge } from './Verified.jsx'
-import { Select, FilePick } from './ui.jsx'
+import { Select, FilePick, SegNav } from './ui.jsx'
 
 const TIER_NAME = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
 const TIERS = ['basico', 'pro', 'premium']
@@ -20,17 +20,26 @@ const VEHICLES = ['Moto', 'Bicicleta', 'Triciclo', 'A pie', 'Carro']
 
 const FEATURES = {
   negocio: {
-    basico: ['Menú y pedidos', 'Aviso de pedido nuevo', 'Mapa del repartidor', 'Hasta 30 productos'],
+    basico: [
+      'Menú y pedidos',
+      'Horario automático',
+      'Aviso de pedido nuevo',
+      'Mapa del repartidor',
+      'Cupones de descuento',
+      'Cliente habitual (premios)',
+      'Marcar productos agotados',
+      'Hasta 30 productos',
+    ],
     pro: [
       'Todo lo Básico',
       'Productos ilimitados',
       'Estadísticas de ventas',
-      'Cupones y promociones',
       'Mejor posición en la lista',
+      'Aviso a clientes cercanos (próximamente)',
     ],
     premium: [
       'Todo lo Pro',
-      'Cuadre de ventas e inventario',
+      'Cuadre de ventas e inventario (próximamente)',
       'Sección Destacados',
       'Soporte prioritario',
     ],
@@ -345,7 +354,7 @@ export function SubscriptionBox({ kind }) {
         .maybeSingle(),
     ])
     setSub(s.data || null)
-    setPlans(p.data || [])
+    setPlans((p.data || []).slice().sort((a, b) => TIERS.indexOf(a.tier) - TIERS.indexOf(b.tier)))
     setMethods(m.data || [])
     setLast(l.data || null)
     setMethod((cur) => cur || (m.data && m.data[0] ? m.data[0].code : ''))
@@ -588,13 +597,11 @@ export function PaymentsAdmin() {
 
   return (
     <>
-      <div className="tabs">
-        {['pendiente', 'confirmado', 'rechazado'].map((s) => (
-          <button key={s} aria-pressed={tab === s} onClick={() => setTab(s)}>
-            {LABELS[s]} ({count(s)})
-          </button>
-        ))}
-      </div>
+      <SegNav
+        items={['pendiente', 'confirmado', 'rechazado'].map((s) => ({ id: s, label: `${LABELS[s]} (${count(s)})` }))}
+        value={tab}
+        onChange={setTab}
+      />
 
       {error && <div className="msg error">{error}</div>}
       {rows === null && !error && <p>Cargando pagos...</p>}
@@ -685,7 +692,7 @@ export function PricingAdmin() {
       supabase.from('payment_methods').select('code, label, currency, details, active, sort').order('sort'),
     ])
     if (p.error || m.error) setMsg({ type: 'error', text: 'No pudimos cargar los precios.' })
-    setPlans(p.data || [])
+    setPlans((p.data || []).slice().sort((a, b) => TIERS.indexOf(a.tier) - TIERS.indexOf(b.tier)))
     setMethods(m.data || [])
   }, [])
 
