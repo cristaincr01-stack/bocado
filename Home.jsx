@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, MapPin, Star, Sparkles, Clock, Bike, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Search, MapPin, Star, Sparkles, Clock, Bike, RefreshCw, ShoppingBag } from 'lucide-react'
 import { supabase } from './lib.js'
 import { money, getPosition } from './utils.js'
 import { VerifiedBadge } from './Verified.jsx'
@@ -26,14 +26,21 @@ function distText(km) {
   return `${km.toFixed(1)} km`
 }
 
-async function loadVisibleBusinesses() {
+let visibleCache = { at: 0, data: null }
+
+export async function loadVisibleBusinesses(force = false) {
+  if (!force && visibleCache.data && Date.now() - visibleCache.at < 20000) return visibleCache.data
   const { data, error } = await supabase.rpc('visible_businesses')
-  if (!error && data) return data
-  const fb = await supabase
-    .from('businesses')
-    .select('id, name, category, address, is_open, courier_fee, tier, lat, lng')
-    .eq('verification_status', 'aprobado')
-  return fb.data || []
+  let result = data
+  if (error || !data) {
+    const fb = await supabase
+      .from('businesses')
+      .select('id, name, category, address, is_open, courier_fee, tier, lat, lng')
+      .eq('verification_status', 'aprobado')
+    result = fb.data || []
+  }
+  visibleCache = { at: Date.now(), data: result }
+  return result
 }
 
 function Rating({ b }) {
@@ -51,12 +58,14 @@ function BizCard({ b, onOpen, km, tile }) {
     <button className={`biz ${tile ? 'tile' : ''} ${b.is_open ? '' : 'closed'}`} onClick={() => onOpen(b)}>
       <div className="biz-cover">
         <span>{initial}</span>
-        <em className={`biz-state ${b.is_open ? 'open' : ''}`}>{b.is_open ? 'Abierto' : 'Cerrado'}</em>
       </div>
       <div className="biz-body">
-        <h3>
-          {b.name} <VerifiedBadge tier={b.tier} size={16} />
-        </h3>
+        <div className="biz-head">
+          <h3>
+            {b.name} <VerifiedBadge tier={b.tier} size={16} />
+          </h3>
+          <em className={`biz-state ${b.is_open ? 'open' : ''}`}>{b.is_open ? 'Abierto' : 'Cerrado'}</em>
+        </div>
         <p className="meta">{[b.category, km != null ? distText(km) : ''].filter(Boolean).join(' - ')}</p>
         <p className="meta biz-line">
           <Rating b={b} />
@@ -66,6 +75,128 @@ function BizCard({ b, onOpen, km, tile }) {
         </p>
       </div>
     </button>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Tarjeta destacada (rectangular) y carrusel                          */
+/* ------------------------------------------------------------------ */
+
+function FeaturedCard({ b, km, onOpen }) {
+  const initial = (b.name || '?').trim().charAt(0).toUpperCase()
+  return (
+    <div
+      className="feat"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(b)}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen(b)}
+    >
+      <div className="feat-top">
+        <span className="feat-tag">
+          <Sparkles size={14} /> Destacado
+        </span>
+        <Rating b={b} />
+      </div>
+
+      <div className="feat-main">
+        <div className="feat-logo">{initial}</div>
+        <div className="feat-info">
+          <div className="feat-name">
+            <h3>{b.name}</h3>
+            <VerifiedBadge tier={b.tier} size={18} />
+            <em className={`biz-state ${b.is_open ? 'open' : ''}`}>{b.is_open ? 'Abierto' : 'Cerrado'}</em>
+          </div>
+          <p className="feat-meta">
+            <MapPin size={14} />
+            {[b.category, b.address, km != null ? distText(km) : ''].filter(Boolean).join(' - ')}
+          </p>
+        </div>
+      </div>
+
+      <div className="feat-bottom">
+        <div className="feat-fee">
+          <small>Envío</small>
+          <b>{Number(b.courier_fee) > 0 ? money(b.courier_fee) : 'Sin costo'}</b>
+        </div>
+        <div className="feat-actions">
+          <button type="button" className="feat-cta" onClick={() => onOpen(b)}>
+            Ver menú
+          </button>
+          <button type="button" className="feat-icon" aria-label="Pedir" onClick={() => onOpen(b)}>
+            <ShoppingBag size={20} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FeaturedCarousel({ items, km, onOpen }) {
+  const ref = useRef(null)
+  const [index, setIndex] = useState(0)
+
+  function onScroll() {
+    const el = ref.current
+    if (!el || !el.firstChild) return
+    const w = el.firstChild.offsetWidth + 12
+    setIndex(Math.min(items.length - 1, Math.max(0, Math.round(el.scrollLeft / w))))
+  }
+
+  return (
+    <>
+      <div className="feat-scroll" ref={ref} onScroll={onScroll}>
+        {items.map((b) => (
+          <FeaturedCard key={b.id} b={b} km={km(b)} onOpen={onOpen} />
+        ))}
+      </div>
+      {items.length > 1 && (
+        <div className="feat-dots" aria-hidden="true">
+          {items.map((b, k) => (
+            <span key={b.id} className={k === index ? 'on' : ''} />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+/* Negocios abiertos parecidos (para recomendar cuando uno rechaza un pedido) */
+export function SimilarBusinesses({ exclude, category, onOpen, limit = 3 }) {
+  const [list, setList] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    loadVisibleBusinesses(true).then((all) => {
+      if (!alive) return
+      const rank = { premium: 2, pro: 1, basico: 0 }
+      setList(
+        all
+          .filter((b) => b.id !== exclude && b.is_open)
+          .sort(
+            (x, y) =>
+              Number(y.category === category) - Number(x.category === category) ||
+              Number(y.rating_avg || 0) - Number(x.rating_avg || 0) ||
+              (rank[y.tier] || 0) - (rank[x.tier] || 0) ||
+              x.name.localeCompare(y.name)
+          )
+          .slice(0, limit)
+      )
+    })
+    return () => {
+      alive = false
+    }
+  }, [exclude, category, limit])
+
+  if (list === null) return <p className="hint">Buscando alternativas...</p>
+  if (list.length === 0)
+    return <p className="hint">Ahora mismo no hay otros negocios abiertos. Vuelve a intentarlo en un rato.</p>
+  return (
+    <div className="list">
+      {list.map((b) => (
+        <BizCard key={b.id} b={b} onOpen={onOpen} />
+      ))}
+    </div>
   )
 }
 
@@ -217,11 +348,7 @@ export function HomeScreen({ onOpen, onSurprise }) {
       {browsing && featured.length > 0 && (
         <>
           <h3 className="section-title">Destacados</h3>
-          <div className="hscroll">
-            {featured.map((b) => (
-              <BizCard key={b.id} b={b} km={b.km} onOpen={onOpen} tile />
-            ))}
-          </div>
+          <FeaturedCarousel items={featured} km={(b) => b.km} onOpen={onOpen} />
         </>
       )}
 
