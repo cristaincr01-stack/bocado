@@ -6,7 +6,7 @@ import { LiveMap } from './Map.jsx'
 import { VerifiedBadge } from './Verified.jsx'
 import { MyProfile } from './Profile.jsx'
 import { BottomNav, useGeoConsent } from './ui.jsx'
-import { HomeScreen, SurpriseScreen, ReviewSheet } from './Home.jsx'
+import { HomeScreen, SurpriseScreen, ReviewSheet, SimilarBusinesses, loadVisibleBusinesses } from './Home.jsx'
 import './shop.css'
 
 const STEPS_PICKUP = ['enviado', 'confirmado', 'en_fogones', 'listo_para_salir', 'entregado']
@@ -41,6 +41,28 @@ export function CustomerApp() {
         .maybeSingle()
       if (p) setMe({ name: p.full_name || '', phone: p.phone || '' })
     })
+  }, [])
+
+  useEffect(() => {
+    let id = null
+    try {
+      id = new URLSearchParams(window.location.search).get('negocio')
+    } catch (e) {
+      id = null
+    }
+    if (!id) return
+    loadVisibleBusinesses(true).then((list) => {
+      const b = (list || []).find((x) => x.id === id)
+      if (b) openBusiness(b)
+      try {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('negocio')
+        window.history.replaceState({}, '', url.toString())
+      } catch (e) {
+        /* sin cambios */
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function openBusiness(b) {
@@ -95,7 +117,7 @@ export function CustomerApp() {
         />
       )}
       {tab === 'sorprende' && <SurpriseScreen onCombo={startCombo} />}
-      {tab === 'pedidos' && <MyOrders notice={notice} />}
+      {tab === 'pedidos' && <MyOrders notice={notice} onOpenBusiness={openBusiness} />}
       {tab === 'perfil' && <MyProfile />}
 
       {!inStore && (
@@ -131,9 +153,17 @@ function loyaltyReward(l) {
 function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
   const [loyalty, setLoyalty] = useState(null)
   const [products, setProducts] = useState(null)
+  const [cats, setCats] = useState([])
+  const [catFilter, setCatFilter] = useState('todos')
   const [error, setError] = useState('')
 
   useEffect(() => {
+    supabase
+      .from('menu_categories')
+      .select('id, name, sort')
+      .eq('business_id', business.id)
+      .order('sort')
+      .then(({ data }) => setCats(data || []))
     supabase
       .from('products')
       .select('*')
@@ -207,8 +237,38 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
         </div>
       )}
 
+      {cats.length > 0 && products && products.length > 0 && (
+        <div className="menu-cats" role="tablist" aria-label="Categorías del menú">
+          <button aria-pressed={catFilter === 'todos'} onClick={() => setCatFilter('todos')}>
+            Todo
+          </button>
+          {cats
+            .filter((c) => products.some((p) => p.category_id === c.id))
+            .map((c) => (
+              <button key={c.id} aria-pressed={catFilter === c.id} onClick={() => setCatFilter(c.id)}>
+                {c.name}
+              </button>
+            ))}
+          {products.some((p) => !p.category_id) && (
+            <button aria-pressed={catFilter === 'otros'} onClick={() => setCatFilter('otros')}>
+              Más productos
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="list">
-        {(products || []).map((p) => (
+        {(products || [])
+          .filter((p) =>
+            catFilter === 'todos' ? true : catFilter === 'otros' ? !p.category_id : p.category_id === catFilter
+          )
+          .sort(
+            (x, y) =>
+              Number(y.available) - Number(x.available) ||
+              (cats.findIndex((c) => c.id === x.category_id) + 1 || 999) -
+                (cats.findIndex((c) => c.id === y.category_id) + 1 || 999)
+          )
+          .map((p) => (
           <div className={`card product ${p.available ? '' : 'soldout'}`} key={p.id}>
             <div className="info">
               <h3>{p.name}</h3>
@@ -520,7 +580,7 @@ function sumTotals(rows) {
   return rows.reduce((t, o) => t + Number(o.total || 0), 0)
 }
 
-function MyOrders({ notice }) {
+function MyOrders({ notice, onOpenBusiness }) {
   const [reviewing, setReviewing] = useState(null)
   const [reviews, setReviews] = useState({})
   const [uid, setUid] = useState(null)
@@ -538,7 +598,7 @@ function MyOrders({ notice }) {
       supabase
         .from('orders')
         .select(
-          'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, discount, coupon_code, reward_note, created_at, business:businesses(name, tier, lat, lng), order_items(id, product_name, quantity)'
+          'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, discount, coupon_code, reward_note, cancelled_by, created_at, business:businesses(id, name, category, tier, lat, lng), order_items(id, product_name, quantity)'
         )
         .eq('customer_id', uid)
         .order('created_at', { ascending: false })
@@ -671,6 +731,17 @@ function MyOrders({ notice }) {
           <span>Total</span>
           <span className={delivered ? '' : 'struck'}>{money(o.total)}</span>
         </div>
+        {!delivered && o.cancelled_by && o.cancelled_by !== uid && Date.now() - new Date(o.created_at).getTime() < 3 * 86400000 && (
+          <div className="rejected-box">
+            <b>El negocio no pudo aceptar tu pedido</b>
+            <span>Estas opciones están abiertas ahora y se parecen:</span>
+            <SimilarBusinesses
+              exclude={o.business?.id}
+              category={o.business?.category}
+              onOpen={onOpenBusiness}
+            />
+          </div>
+        )}
         {delivered && (
           <div className="order-actions">
             {reviews[o.id] ? (

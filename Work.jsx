@@ -5,8 +5,9 @@ import { LiveMap } from './Map.jsx'
 import { playAlert } from './alert.js'
 import { MyProfile, BusinessProfile, SubscriptionBox } from './Profile.jsx'
 import { Select, TIME_OPTIONS, useConfirm, PillNav, SegNav } from './ui.jsx'
-import { CouponsManager, LoyaltyManager } from './Promos.jsx'
+import { CouponsManager, LoyaltyManager, ShareBusiness, PrioritySupport } from './Promos.jsx'
 import { TierTools } from './Tools.jsx'
+import { CategoryManager } from './Categories.jsx'
 import { StatsDashboard, BlockedCustomers } from './Stats.jsx'
 import { ClipboardList, UtensilsCrossed, Wrench, UserCog, BarChart3 } from 'lucide-react'
 import './shop.css'
@@ -22,11 +23,11 @@ export function BusinessDashboard({ business, setBusiness }) {
 
   function openTool(id) {
     if (id === 'estadisticas') setTab('estadisticas')
-    else if (id === 'cupones' || id === 'habitual' || id === 'bloqueos') setTool(id)
+    else if (['cupones', 'habitual', 'bloqueos', 'enlace', 'soporte'].includes(id)) setTool(id)
     else if (id === 'horario') {
       setAccount('ajustes')
       setTab('cuenta')
-    } else if (id === 'agotados') setTab('menu')
+    } else if (id === 'agotados' || id === 'categorias') setTab('menu')
   }
 
   function upgrade() {
@@ -59,6 +60,10 @@ export function BusinessDashboard({ business, setBusiness }) {
       {tab === 'herramientas' && !tool && (
         <TierTools kind="negocio" tier={business.tier} onOpen={openTool} onUpgrade={upgrade} />
       )}
+      {tab === 'herramientas' && tool === 'enlace' && (
+        <ShareBusiness business={business} onBack={() => setTool(null)} />
+      )}
+      {tab === 'herramientas' && tool === 'soporte' && <PrioritySupport onBack={() => setTool(null)} />}
       {tab === 'herramientas' && tool === 'cupones' && (
         <CouponsManager business={business} onBack={() => setTool(null)} />
       )}
@@ -311,8 +316,9 @@ function BusinessOrders({ business }) {
 
 /* ---------- Menú ---------- */
 
-function ProductForm({ business, product, onDone, onCancel }) {
+function ProductForm({ business, product, categories = [], onDone, onCancel }) {
   const [f, setF] = useState({
+    category_id: product?.category_id || '',
     name: product?.name || '',
     price: product?.price ?? '',
     description: product?.description || '',
@@ -336,6 +342,7 @@ function ProductForm({ business, product, onDone, onCancel }) {
       has_delivery: f.has_delivery,
       available: f.available,
     }
+    if (categories.length > 0) row.category_id = f.category_id || null
     setBusy(true)
     const { error } = product
       ? await supabase.from('products').update(row).eq('id', product.id)
@@ -366,6 +373,17 @@ function ProductForm({ business, product, onDone, onCancel }) {
         <span>Descripción (opcional)</span>
         <textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
       </label>
+      {categories.length > 0 && (
+        <div className="field">
+          <span>Categoría</span>
+          <Select
+            title="Categoría del producto"
+            value={f.category_id}
+            onChange={(v) => setF({ ...f, category_id: v })}
+            options={[{ value: '', label: 'Sin categoría' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+          />
+        </div>
+      )}
       <label className="check">
         <input
           type="checkbox"
@@ -400,6 +418,10 @@ function MenuManager({ business }) {
   const [items, setItems] = useState(null)
   const [editing, setEditing] = useState(null)
   const [error, setError] = useState('')
+  const [cats, setCats] = useState([])
+  const [managing, setManaging] = useState(false)
+  const [catNote, setCatNote] = useState(false)
+  const canCats = business.tier === 'pro' || business.tier === 'premium'
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabase
@@ -412,6 +434,12 @@ function MenuManager({ business }) {
       setError('')
       setItems(data)
     }
+    const c = await supabase
+      .from('menu_categories')
+      .select('id, name, sort')
+      .eq('business_id', business.id)
+      .order('sort')
+    setCats(c.data || [])
   }, [business.id])
 
   useEffect(() => {
@@ -437,6 +465,17 @@ function MenuManager({ business }) {
     load()
   }
 
+  if (managing)
+    return (
+      <CategoryManager
+        business={business}
+        onBack={() => {
+          setManaging(false)
+          load()
+        }}
+      />
+    )
+
   return (
     <>
       {confirmUI}
@@ -445,20 +484,27 @@ function MenuManager({ business }) {
       {editing ? (
         <ProductForm
           business={business}
+          categories={canCats ? cats : []}
           product={editing === 'new' ? null : editing}
           onDone={done}
           onCancel={() => setEditing(null)}
         />
       ) : (
         <>
-          <button
-            className="btn"
-            style={{ marginBottom: 14 }}
-            disabled={atLimit}
-            onClick={() => setEditing('new')}
-          >
-            Agregar producto
-          </button>
+          <div className="order-actions" style={{ marginTop: 0, marginBottom: 14 }}>
+            <button className="btn" disabled={atLimit} onClick={() => setEditing('new')}>
+              Agregar producto
+            </button>
+            <button
+              className="btn secondary"
+              onClick={() => (canCats ? setManaging(true) : setCatNote(true))}
+            >
+              Categorías
+            </button>
+          </div>
+          {catNote && !canCats && (
+            <div className="notice">Las categorías del menú son una herramienta de los planes Pro y Premium.</div>
+          )}
           {atLimit && (
             <div className="notice">
               Tu plan Básico permite hasta 30 productos. Con Pro tienes productos ilimitados.
@@ -486,6 +532,9 @@ function MenuManager({ business }) {
             <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               {!p.available && <span className="badge agotado">Agotado</span>}
               {p.has_delivery && <span className="badge propio">Envío incluido</span>}
+              {p.category_id && cats.find((c) => c.id === p.category_id) && (
+                <span className="badge">{cats.find((c) => c.id === p.category_id).name}</span>
+              )}
             </div>
             <div className="order-actions">
               <button className="btn small secondary" onClick={() => setEditing(p)}>

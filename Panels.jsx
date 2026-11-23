@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike, Users, PackageCheck, User, Wrench } from 'lucide-react'
 import { TierTools } from './Tools.jsx'
+import { PrioritySupport } from './Promos.jsx'
 import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
@@ -260,6 +261,7 @@ export function BusinessPanel({ profile }) {
 
 
 function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
+  const [support, setSupport] = useState(false)
   const [tab, setTab] = useState('entregas')
   return (
     <>
@@ -290,9 +292,15 @@ function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
           <CourierWork courier={courier} />
         </>
       )}
-      {tab === 'herramientas' && (
-        <TierTools kind="repartidor" tier={courier.tier} onUpgrade={() => setTab('perfil')} />
+      {tab === 'herramientas' && !support && (
+        <TierTools
+          kind="repartidor"
+          tier={courier.tier}
+          onOpen={(id) => id === 'soporte' && setSupport(true)}
+          onUpgrade={() => setTab('perfil')}
+        />
       )}
+      {tab === 'herramientas' && support && <PrioritySupport onBack={() => setSupport(false)} />}
       {tab === 'perfil' && (
         <div className="stack">
           <MyProfile role="repartidor" />

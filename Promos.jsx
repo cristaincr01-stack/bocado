@@ -377,3 +377,113 @@ export function LoyaltyManager({ business, onBack }) {
     </div>
   )
 }
+
+/* ------------------------------------------------------------------ */
+/* Enlace y código QR del negocio (todos los niveles)                  */
+/* ------------------------------------------------------------------ */
+
+export function ShareBusiness({ business, onBack }) {
+  const [msg, setMsg] = useState(null)
+  const base = `${window.location.origin}${window.location.pathname}`
+  const link = `${base}?negocio=${business.id}`
+  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=10&data=${encodeURIComponent(link)}`
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link)
+      setMsg({ type: 'ok', text: 'Enlace copiado.' })
+    } catch (e) {
+      setMsg({ type: 'error', text: 'No pudimos copiarlo. Mantén presionado el enlace para copiarlo.' })
+    }
+  }
+
+  async function share() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: business.name, text: `Haz tu pedido en ${business.name} por Bocado`, url: link })
+      } catch (e) {
+        /* el usuario cerró el menú de compartir */
+      }
+    } else copy()
+  }
+
+  return (
+    <div className="stack">
+      <button type="button" className="link" onClick={onBack}>
+        Volver a herramientas
+      </button>
+      <h3 className="section-title" style={{ marginTop: 0 }}>
+        Enlace y código QR
+      </h3>
+      <p className="hint">
+        Pon este enlace en tu estado de WhatsApp, Instagram o Facebook, o imprime el QR en tu local. Tus clientes
+        entran directo a tu menú.
+      </p>
+      <div className="card" style={{ textAlign: 'center' }}>
+        <img className="qr-img" src={qr} alt={`Código QR de ${business.name}`} width="260" height="260" />
+        <p className="hint">Mantén presionada la imagen para guardarla.</p>
+        <p className="share-link">{link}</p>
+        {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+        <div className="order-actions" style={{ justifyContent: 'center' }}>
+          <button className="btn small" onClick={share}>
+            Compartir
+          </button>
+          <button className="btn small secondary" onClick={copy}>
+            Copiar enlace
+          </button>
+        </div>
+      </div>
+      {business.is_open === false && (
+        <p className="hint">Tu negocio solo aparece para los clientes cuando tiene un plan activo y está aprobado.</p>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Soporte prioritario (Premium)                                       */
+/* ------------------------------------------------------------------ */
+
+export function PrioritySupport({ onBack }) {
+  const [state, setState] = useState({ loading: true, phone: null, error: false })
+
+  useEffect(() => {
+    supabase.rpc('get_priority_support').then(({ data, error }) => {
+      setState({ loading: false, phone: error ? null : data, error: !!error })
+    })
+  }, [])
+
+  const digits = (state.phone || '').replace(/\D/g, '')
+
+  return (
+    <div className="stack">
+      <button type="button" className="link" onClick={onBack}>
+        Volver a herramientas
+      </button>
+      <h3 className="section-title" style={{ marginTop: 0 }}>
+        Soporte prioritario
+      </h3>
+      {state.loading && <p>Cargando...</p>}
+      {!state.loading && digits && (
+        <div className="card">
+          <p>Escríbenos por WhatsApp. Los planes Premium se atienden primero.</p>
+          <a
+            className="btn"
+            href={`https://wa.me/${digits}?text=${encodeURIComponent('Hola, soy Premium en Bocado y necesito ayuda.')}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Escribir a soporte
+          </a>
+        </div>
+      )}
+      {!state.loading && !digits && (
+        <div className="notice">
+          {state.error
+            ? 'El soporte prioritario es para cuentas Premium con plan activo.'
+            : 'Todavía no se configuró el número de soporte. Inténtalo más tarde.'}
+        </div>
+      )}
+    </div>
+  )
+}

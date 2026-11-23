@@ -803,6 +803,8 @@ export function PricingAdmin() {
         </div>
       ))}
 
+      <SupportSetting />
+
       <h3 className="section-title">Métodos de pago</h3>
       <p className="hint">
         Lo que escribas aquí lo ven los usuarios cuando van a pagar: tarjeta, usuario o dirección.
@@ -838,6 +840,47 @@ export function PricingAdmin() {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+
+function SupportSetting() {
+  const [value, setValue] = useState('')
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'support_whatsapp')
+      .maybeSingle()
+      .then(({ data }) => setValue(data?.value || ''))
+  }, [])
+
+  async function save() {
+    setMsg(null)
+    const { error } = await supabase.rpc('admin_set_setting', { p_key: 'support_whatsapp', p_value: value.trim() })
+    setMsg(error ? { type: 'error', text: 'No se pudo guardar.' } : { type: 'ok', text: 'Número guardado.' })
+  }
+
+  return (
+    <div className="card">
+      <h3>Soporte prioritario</h3>
+      <label className="field">
+        <span>WhatsApp de soporte (con código de país)</span>
+        <input
+          value={value}
+          inputMode="tel"
+          placeholder="Por ejemplo: 5355555555"
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <p className="hint">Solo lo ven los negocios y repartidores con plan Premium activo.</p>
+      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+      <button className="btn small" onClick={save}>
+        Guardar número
+      </button>
     </div>
   )
 }
