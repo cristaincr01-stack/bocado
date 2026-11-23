@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin, CheckCircle2, Store, ClipboardList, User, Heart } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, ShoppingBag, MapPin, CheckCircle2, Home, ClipboardList, User, Heart, Sparkles, Star } from 'lucide-react'
 import { supabase, STATUS_LABELS } from './lib.js'
 import { money, getPosition, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
 import { VerifiedBadge } from './Verified.jsx'
 import { MyProfile } from './Profile.jsx'
-import { PillNav } from './ui.jsx'
+import { BottomNav, useGeoConsent } from './ui.jsx'
+import { HomeScreen, SurpriseScreen, ReviewSheet } from './Home.jsx'
 import './shop.css'
 
 const STEPS_PICKUP = ['enviado', 'confirmado', 'en_fogones', 'listo_para_salir', 'entregado']
@@ -22,7 +23,7 @@ const STEPS_DELIVERY = [
 /* ------------------------------------------------------------------ */
 
 export function CustomerApp() {
-  const [tab, setTab] = useState('negocios')
+  const [tab, setTab] = useState('inicio')
   const [business, setBusiness] = useState(null)
   const [cart, setCart] = useState({})
   const [checkout, setCheckout] = useState(false)
@@ -47,6 +48,17 @@ export function CustomerApp() {
     setCart({})
     setCheckout(false)
     setNotice('')
+    setTab('inicio')
+  }
+
+  function startCombo(r) {
+    const next = {}
+    r.lines.forEach((l) => (next[l.product.id] = { product: l.product, qty: l.qty }))
+    setBusiness(r.business)
+    setCart(next)
+    setCheckout(true)
+    setNotice('')
+    setTab('inicio')
   }
 
   function placed(extra) {
@@ -57,23 +69,14 @@ export function CustomerApp() {
     setNotice(extra ? `Pedido enviado. ${extra}` : 'Pedido enviado. Aquí puedes seguirlo paso a paso.')
   }
 
-  return (
-    <>
-      <PillNav
-        items={[
-          { id: 'negocios', label: 'Negocios', Icon: Store },
-          { id: 'pedidos', label: 'Mis pedidos', Icon: ClipboardList },
-          { id: 'perfil', label: 'Mi perfil', Icon: User },
-        ]}
-        value={tab}
-        onChange={(id) => {
-          setTab(id)
-          if (id === 'pedidos') setNotice('')
-        }}
-      />
+  const inStore = tab === 'inicio' && business
 
-      {tab === 'negocios' && !business && <BusinessList onOpen={openBusiness} />}
-      {tab === 'negocios' && business && !checkout && (
+  return (
+    <div className={inStore ? '' : 'with-bottom-nav'}>
+      {tab === 'inicio' && !business && (
+        <HomeScreen onOpen={openBusiness} onSurprise={() => setTab('sorprende')} />
+      )}
+      {tab === 'inicio' && business && !checkout && (
         <BusinessMenu
           business={business}
           cart={cart}
@@ -82,7 +85,7 @@ export function CustomerApp() {
           onCheckout={() => setCheckout(true)}
         />
       )}
-      {tab === 'negocios' && business && checkout && (
+      {tab === 'inicio' && business && checkout && (
         <Checkout
           business={business}
           cart={cart}
@@ -91,79 +94,28 @@ export function CustomerApp() {
           onPlaced={placed}
         />
       )}
+      {tab === 'sorprende' && <SurpriseScreen onCombo={startCombo} />}
       {tab === 'pedidos' && <MyOrders notice={notice} />}
       {tab === 'perfil' && <MyProfile />}
-    </>
-  )
-}
 
-/* ------------------------------------------------------------------ */
-
-function BusinessList({ onOpen }) {
-  const [items, setItems] = useState(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    supabase
-      .from('businesses')
-      .select('id, name, category, address, is_open, courier_fee, tier')
-      .eq('verification_status', 'aprobado')
-      .order('name')
-      .then(({ data, error: err }) => {
-        if (err) setError('No pudimos cargar los negocios. Inténtalo de nuevo.')
-        else {
-          const rank = { premium: 2, pro: 1, basico: 0 }
-          setItems(
-            data
-              .slice()
-              .sort(
-                (x, y) =>
-                  Number(y.is_open) - Number(x.is_open) ||
-                  (rank[y.tier] || 0) - (rank[x.tier] || 0) ||
-                  x.name.localeCompare(y.name)
-              )
-          )
-        }
-      })
-  }, [])
-
-  const featured = (items || []).filter((b) => b.tier === 'premium' && b.is_open)
-  const card = (b) => (
-    <button
-      key={b.id}
-      className="card"
-      style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
-      onClick={() => onOpen(b)}
-    >
-      <div className="row">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {b.name} <VerifiedBadge tier={b.tier} size={18} />
-        </h3>
-        <span className={`badge ${b.is_open ? 'aprobado' : ''}`}>{b.is_open ? 'Abierto' : 'Cerrado'}</span>
-      </div>
-      <p className="meta">{[b.category, b.address].filter(Boolean).join(' - ')}</p>
-    </button>
-  )
-
-  return (
-    <>
-      {error && <div className="msg error">{error}</div>}
-      {items === null && !error && <p>Cargando...</p>}
-      {items && items.length === 0 && (
-        <div className="empty">
-          <strong>Aún no hay negocios en tu zona</strong>
-          Estamos sumando los primeros. Vuelve pronto.
-        </div>
+      {!inStore && (
+        <BottomNav
+          items={[
+            { id: 'inicio', label: 'Inicio', Icon: Home },
+            { id: 'sorprende', label: 'Sorpréndeme', Icon: Sparkles },
+            { id: 'pedidos', label: 'Pedidos', Icon: ClipboardList },
+            { id: 'perfil', label: 'Perfil', Icon: User },
+          ]}
+          value={tab}
+          onChange={(id) => {
+            setTab(id)
+            setBusiness(null)
+            setCheckout(false)
+            if (id === 'pedidos') setNotice('')
+          }}
+        />
       )}
-      {featured.length > 0 && (
-        <>
-          <h3 className="section-title" style={{ marginTop: 0 }}>Destacados</h3>
-          <div className="list" style={{ marginBottom: 18 }}>{featured.map(card)}</div>
-          <h3 className="section-title">Todos los negocios</h3>
-        </>
-      )}
-      <div className="list">{(items || []).map(card)}</div>
-    </>
+    </div>
   )
 }
 
@@ -371,8 +323,11 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
     setCouponMsg({ type: 'ok', text: `Código aplicado: -${money(data.discount)}` })
   }
 
+  const [askGeo, geoUI] = useGeoConsent()
+
   async function useMyLocation() {
     setMsg(null)
+    if (!(await askGeo())) return
     try {
       setPos(await getPosition())
     } catch (err) {
@@ -438,6 +393,7 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
 
   return (
     <form onSubmit={submit}>
+      {geoUI}
       <button type="button" className="link" onClick={onBack}>
         <ArrowLeft size={18} /> Volver al menú
       </button>
@@ -565,6 +521,8 @@ function sumTotals(rows) {
 }
 
 function MyOrders({ notice }) {
+  const [reviewing, setReviewing] = useState(null)
+  const [reviews, setReviews] = useState({})
   const [uid, setUid] = useState(null)
   const [orders, setOrders] = useState(null)
   const [spent, setSpent] = useState(null)
@@ -592,6 +550,8 @@ function MyOrders({ notice }) {
       setError('')
       setOrders(list.data)
     }
+    const rv = await supabase.from('reviews').select('order_id, business_rating').eq('customer_id', uid)
+    if (rv.data) setReviews(Object.fromEntries(rv.data.map((r) => [r.order_id, r.business_rating])))
     if (done.data) {
       const now = new Date()
       const month = done.data.filter((o) => {
@@ -711,6 +671,19 @@ function MyOrders({ notice }) {
           <span>Total</span>
           <span className={delivered ? '' : 'struck'}>{money(o.total)}</span>
         </div>
+        {delivered && (
+          <div className="order-actions">
+            {reviews[o.id] ? (
+              <span className="rate">
+                <Star size={14} fill="currentColor" /> Valoraste con {reviews[o.id]}
+              </span>
+            ) : (
+              <button className="btn small secondary" onClick={() => setReviewing(o)}>
+                Valorar pedido
+              </button>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -750,6 +723,17 @@ function MyOrders({ notice }) {
 
       {history.length > 0 && <h3 className="section-title">Historial</h3>}
       <div className="list">{history.map(renderHistory)}</div>
+
+      {reviewing && (
+        <ReviewSheet
+          order={reviewing}
+          onClose={() => setReviewing(null)}
+          onDone={() => {
+            setReviewing(null)
+            load()
+          }}
+        />
+      )}
     </>
   )
 }

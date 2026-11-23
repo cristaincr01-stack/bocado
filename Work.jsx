@@ -7,7 +7,8 @@ import { MyProfile, BusinessProfile, SubscriptionBox } from './Profile.jsx'
 import { Select, TIME_OPTIONS, useConfirm, PillNav, SegNav } from './ui.jsx'
 import { CouponsManager, LoyaltyManager } from './Promos.jsx'
 import { TierTools } from './Tools.jsx'
-import { ClipboardList, UtensilsCrossed, Wrench, UserCog } from 'lucide-react'
+import { StatsDashboard, BlockedCustomers } from './Stats.jsx'
+import { ClipboardList, UtensilsCrossed, Wrench, UserCog, BarChart3 } from 'lucide-react'
 import './shop.css'
 
 /* ================================================================== */
@@ -20,7 +21,8 @@ export function BusinessDashboard({ business, setBusiness }) {
   const [tool, setTool] = useState(null)
 
   function openTool(id) {
-    if (id === 'cupones' || id === 'habitual') setTool(id)
+    if (id === 'estadisticas') setTab('estadisticas')
+    else if (id === 'cupones' || id === 'habitual' || id === 'bloqueos') setTool(id)
     else if (id === 'horario') {
       setAccount('ajustes')
       setTab('cuenta')
@@ -38,6 +40,7 @@ export function BusinessDashboard({ business, setBusiness }) {
         items={[
           { id: 'pedidos', label: 'Pedidos', Icon: ClipboardList },
           { id: 'menu', label: 'Menú', Icon: UtensilsCrossed },
+          { id: 'estadisticas', label: 'Estadísticas', Icon: BarChart3 },
           { id: 'herramientas', label: 'Herramientas', Icon: Wrench },
           { id: 'cuenta', label: 'Cuenta', Icon: UserCog },
         ]}
@@ -49,6 +52,10 @@ export function BusinessDashboard({ business, setBusiness }) {
       />
       {tab === 'pedidos' && <BusinessOrders business={business} />}
       {tab === 'menu' && <MenuManager business={business} />}
+      {tab === 'estadisticas' && <StatsDashboard business={business} onUpgrade={upgrade} />}
+      {tab === 'herramientas' && tool === 'bloqueos' && (
+        <BlockedCustomers business={business} onBack={() => setTool(null)} />
+      )}
       {tab === 'herramientas' && !tool && (
         <TierTools kind="negocio" tier={business.tier} onOpen={openTool} onUpgrade={upgrade} />
       )}
@@ -125,12 +132,29 @@ function BusinessOrders({ business }) {
   const [notes, setNotes] = useState({})
   const [busyId, setBusyId] = useState(null)
   const known = useRef(null)
+  const [confirm, confirmUI] = useConfirm()
+
+  async function blockCustomer(o) {
+    const ok = await confirm(
+      `¿Bloquear a ${o.customer_name || 'este cliente'}? No podrá hacer pedidos en tu negocio.`,
+      'Bloquear'
+    )
+    if (!ok) return
+    const { error: err } = await supabase.from('business_customer_blocks').upsert({
+      business_id: business.id,
+      customer_id: o.customer_id,
+      customer_name: o.customer_name || null,
+      reason: 'Reportado por el negocio',
+    })
+    if (err) setError('No pudimos bloquear al cliente.')
+    else setNotes((n) => ({ ...n, [o.id]: 'Cliente bloqueado. Ya no podrá pedir en tu negocio.' }))
+  }
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('orders')
       .select(
-        'id, status, delivery_type, delivery_mode, delivery_address, delivery_lat, delivery_lng, notes, customer_name, customer_phone, subtotal, delivery_fee, discount, coupon_code, reward_note, total, courier_id, created_at, order_items(id, product_name, quantity, unit_price)'
+        'id, status, delivery_type, delivery_mode, delivery_address, delivery_lat, delivery_lng, notes, customer_id, customer_name, customer_phone, risk_note, subtotal, delivery_fee, discount, coupon_code, reward_note, total, courier_id, created_at, order_items(id, product_name, quantity, unit_price)'
       )
       .eq('business_id', business.id)
       .order('created_at', { ascending: false })
@@ -195,6 +219,9 @@ function BusinessOrders({ business }) {
             {STATUS_LABELS[o.status]}
           </span>
         </div>
+        {o.risk_note && o.status !== 'entregado' && o.status !== 'cancelado' && (
+          <p className="risk-line">Atención: {o.risk_note}</p>
+        )}
         {o.customer_phone && <p className="meta">{o.customer_phone}</p>}
         <ul className="items-list">
           {o.order_items.map((i) => (
@@ -234,6 +261,11 @@ function BusinessOrders({ business }) {
         {notes[o.id] && <div className="notice" style={{ marginTop: 10, marginBottom: 0 }}>{notes[o.id]}</div>}
 
         <div className="order-actions">
+          {o.customer_id && ['enviado', 'confirmado', 'cancelado'].includes(o.status) && (
+            <button className="btn small secondary" onClick={() => blockCustomer(o)}>
+              Bloquear cliente
+            </button>
+          )}
           {businessActions(o).map(([label, status, danger]) => (
             <button
               key={status}
@@ -260,6 +292,7 @@ function BusinessOrders({ business }) {
 
   return (
     <>
+      {confirmUI}
       {error && <div className="msg error">{error}</div>}
       {orders === null && !error && <p>Cargando pedidos...</p>}
       {orders && orders.length === 0 && (

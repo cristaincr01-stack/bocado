@@ -1,4 +1,4 @@
-import { Lock, Ticket, Heart, Clock, PackageX, TrendingUp, BarChart3, BellRing, Star, ClipboardList, Headset, Map as MapIcon, Route, Gauge, Medal } from 'lucide-react'
+import { Lock, Ticket, Heart, Clock, PackageX, TrendingUp, BarChart3, BellRing, Star, ClipboardList, Headset, Map as MapIcon, Route, Gauge, Medal, ShieldBan } from 'lucide-react'
 
 const RANK = { basico: 0, pro: 1, premium: 2 }
 const NAME = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
@@ -11,7 +11,8 @@ const TOOLS = {
     { id: 'horario', min: 'basico', status: 'listo', Icon: Clock, name: 'Horario automático', text: 'Abres y cierras solo según tu horario.', open: true },
     { id: 'agotados', min: 'basico', status: 'listo', Icon: PackageX, name: 'Marcar productos agotados', text: 'Un toque y el cliente lo ve agotado.', open: true },
     { id: 'posicion', min: 'pro', status: 'listo', Icon: TrendingUp, name: 'Mejor posición en la lista', text: 'Apareces antes que los negocios Básico.' },
-    { id: 'estadisticas', min: 'pro', status: 'pronto', Icon: BarChart3, name: 'Estadísticas de ventas', text: 'Ventas por día y productos más pedidos.' },
+    { id: 'estadisticas', min: 'basico', status: 'listo', Icon: BarChart3, name: 'Estadísticas de ventas', text: 'Hoy en Básico; gráfico y ranking completos desde Pro.', open: true },
+    { id: 'bloqueos', min: 'basico', status: 'listo', Icon: ShieldBan, name: 'Clientes bloqueados', text: 'Protege tu negocio de pedidos falsos.', open: true },
     { id: 'cercanos', min: 'pro', status: 'pronto', Icon: BellRing, name: 'Aviso a clientes cercanos', text: 'Te mostramos a quien está cerca de tu negocio.' },
     { id: 'destacados', min: 'premium', status: 'listo', Icon: Star, name: 'Sección Destacados', text: 'Apareces arriba, en la sección de destacados.' },
     { id: 'cuadre', min: 'premium', status: 'pronto', Icon: ClipboardList, name: 'Cuadre de ventas e inventario', text: 'Controla lo que vendes y lo que te queda.' },

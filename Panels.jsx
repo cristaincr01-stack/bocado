@@ -462,6 +462,19 @@ function VerifyRow({ kind, item, tiers, onSaved, done }) {
   const doneText = done === undefined ? null : `${done} ${done === 1 ? 'pedido entregado' : 'pedidos entregados'}`
   const initial = (title || '?').trim().charAt(0).toUpperCase()
 
+  const [gift, setGift] = useState('')
+
+  async function giftDays() {
+    setGift('')
+    const { error: err } = await supabase.rpc('admin_grant_days', {
+      p_profile: kind === 'negocio' ? item.owner_id : item.id,
+      p_kind: kind,
+      p_tier: tier,
+      p_days: 30,
+    })
+    setGift(err ? 'No se pudo regalar el plan.' : `Regalaste 30 días de nivel ${TIER_LABEL[tier]}.`)
+  }
+
   async function save() {
     setBusy(true)
     setError('')
@@ -525,7 +538,13 @@ function VerifyRow({ kind, item, tiers, onSaved, done }) {
         <button className="btn small" onClick={save} disabled={busy}>
           {busy ? 'Guardando...' : 'Guardar cambios'}
         </button>
+        {item.verification_status === 'aprobado' && (
+          <button className="btn small secondary" onClick={giftDays}>
+            Regalar 30 días de plan
+          </button>
+        )}
       </div>
+      {gift && <div className="msg ok" style={{ marginTop: 10 }}>{gift}</div>}
       {error && <div className="msg error" style={{ marginTop: 10 }}>{error}</div>}
     </div>
   )
@@ -552,7 +571,7 @@ export function AdminPanel() {
       supabase
         .from('businesses')
         .select(
-          'id, name, category, address, verification_status, tier, owner:profiles!owner_id(full_name, phone)'
+          'id, owner_id, name, category, address, verification_status, tier, owner:profiles!owner_id(full_name, phone)'
         )
         .order('created_at', { ascending: false }),
       supabase

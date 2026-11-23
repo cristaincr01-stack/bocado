@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, ImagePlus, X } from 'lucide-react'
+import { Check, ChevronDown, ImagePlus, X, Star, MapPin } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
 /* Hoja inferior (reemplaza los menús nativos del navegador)           */
 /* ------------------------------------------------------------------ */
 
-function Sheet({ title, onClose, children }) {
+export function Sheet({ title, onClose, children }) {
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -216,4 +216,111 @@ export function SegNav({ items, value, onChange }) {
       ))}
     </div>
   )
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Barra inferior (cliente)                                            */
+/* ------------------------------------------------------------------ */
+
+export function BottomNav({ items, value, onChange }) {
+  return (
+    <nav className="bottom-nav" aria-label="Navegación principal">
+      {items.map(({ id, label, Icon }) => (
+        <button key={id} aria-pressed={value === id} onClick={() => onChange(id)}>
+          <Icon size={22} />
+          <span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Estrellas                                                           */
+/* ------------------------------------------------------------------ */
+
+export function Stars({ value, onChange, size = 28 }) {
+  return (
+    <div className="stars" role={onChange ? 'radiogroup' : undefined}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          type="button"
+          key={n}
+          disabled={!onChange}
+          aria-label={`${n} estrellas`}
+          onClick={() => onChange && onChange(n)}
+          className={n <= value ? 'on' : ''}
+        >
+          <Star size={size} fill={n <= value ? 'currentColor' : 'none'} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Pantalla propia antes del permiso de ubicación                      */
+/* const [askGeo, geoUI] = useGeoConsent()                             */
+/* if (await askGeo()) { ...pedir la ubicación al navegador... }       */
+/* ------------------------------------------------------------------ */
+
+const GEO_KEY = 'bocado_geo_ok'
+
+export function useGeoConsent() {
+  const [state, setState] = useState(null)
+
+  const ask = useCallback(
+    () =>
+      new Promise((resolve) => {
+        let saved = false
+        try {
+          saved = window.localStorage.getItem(GEO_KEY) === '1'
+        } catch (e) {
+          saved = false
+        }
+        if (saved) return resolve(true)
+        setState({ resolve })
+      }),
+    []
+  )
+
+  function finish(ok) {
+    if (ok) {
+      try {
+        window.localStorage.setItem(GEO_KEY, '1')
+      } catch (e) {
+        /* sin almacenamiento: se vuelve a preguntar la próxima vez */
+      }
+    }
+    if (state) state.resolve(ok)
+    setState(null)
+  }
+
+  const ui = state ? (
+    <Sheet onClose={() => finish(false)}>
+      <div className="geo-sheet">
+        <div className="geo-icon">
+          <MapPin size={30} />
+        </div>
+        <h3>Encuentra negocios cerca de ti</h3>
+        <p>
+          Usamos tu ubicación solo mientras tienes Bocado abierto: para mostrarte los negocios más cercanos,
+          avisarte de ofertas a pocos metros y ayudar a tu repartidor a encontrarte. No la compartimos con
+          nadie más.
+        </p>
+        <p className="hint">Después tu teléfono te pedirá confirmar el permiso.</p>
+        <div className="ui-confirm-actions">
+          <button type="button" className="btn" onClick={() => finish(true)}>
+            Permitir ubicación
+          </button>
+          <button type="button" className="btn secondary" onClick={() => finish(false)}>
+            Ahora no
+          </button>
+        </div>
+      </div>
+    </Sheet>
+  ) : null
+
+  return [ask, ui]
 }
