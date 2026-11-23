@@ -6,6 +6,7 @@ import { LiveMap } from './Map.jsx'
 import { VerifiedBadge } from './Verified.jsx'
 import { MyProfile } from './Profile.jsx'
 import { BottomNav, useGeoConsent } from './ui.jsx'
+import { CourierInfo } from './CourierInfo.jsx'
 import { HomeScreen, SurpriseScreen, ReviewSheet, SimilarBusinesses, loadVisibleBusinesses } from './Home.jsx'
 import './shop.css'
 
@@ -176,8 +177,11 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
     supabase.rpc('loyalty_status', { p_business: business.id }).then(({ data }) => setLoyalty(data || null))
   }, [business.id])
 
-  const add = (p) =>
+  const atStock = (p) => p.stock !== null && p.stock !== undefined && (cart[p.id]?.qty || 0) >= p.stock
+  const add = (p) => {
+    if (atStock(p)) return
     setCart({ ...cart, [p.id]: { product: p, qty: (cart[p.id]?.qty || 0) + 1 } })
+  }
 
   const remove = (p) => {
     const qty = (cart[p.id]?.qty || 0) - 1
@@ -276,6 +280,9 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
               <p className="price">{money(p.price)}</p>
               {p.has_delivery && <span className="badge propio">Envío incluido</span>}
               {!p.available && <span className="badge agotado">Agotado</span>}
+              {p.available && p.stock !== null && p.stock !== undefined && p.stock <= 5 && (
+                <span className="badge">{p.stock <= 3 ? 'Últimas unidades' : `Quedan ${p.stock}`}</span>
+              )}
             </div>
             <div className="qty">
               {p.available && cart[p.id] && (
@@ -291,7 +298,7 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
                   className="add"
                   aria-label="Agregar uno"
                   onClick={() => add(p)}
-                  disabled={!business.is_open}
+                  disabled={!business.is_open || atStock(p)}
                 >
                   <Plus size={18} />
                 </button>
@@ -674,6 +681,11 @@ function MyOrders({ notice, onOpenBusiness }) {
           ))}
         </ul>
 
+        {o.courier_id && ['confirmado', 'en_fogones', 'listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
+          <div style={{ marginTop: 12 }}>
+            <CourierInfo orderId={o.id} label="Tu repartidor" />
+          </div>
+        )}
         {o.courier_id && ['listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
           <div style={{ marginTop: 12 }}>
             <LiveMap

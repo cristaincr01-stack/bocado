@@ -487,3 +487,164 @@ export function PrioritySupport({ onBack }) {
     </div>
   )
 }
+
+/* ------------------------------------------------------------------ */
+/* Aviso a clientes cercanos (todos los niveles)                       */
+/* ------------------------------------------------------------------ */
+
+const RADIUS = [500, 1000, 2000, 3000, 5000].map((m) => ({
+  value: String(m),
+  label: m < 1000 ? `${m} metros` : `${m / 1000} km`,
+}))
+const DURATION = [
+  { value: '3', label: '3 horas' },
+  { value: '8', label: '8 horas' },
+  { value: '24', label: '1 día' },
+  { value: '72', label: '3 días' },
+  { value: '168', label: '7 días' },
+]
+
+export function NearbyManager({ business, onBack }) {
+  const [confirm, confirmUI] = useConfirm()
+  const [list, setList] = useState(null)
+  const [coupons, setCoupons] = useState([])
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [f, setF] = useState({ message: '', radius: '1000', hours: '24', code: '' })
+
+  const load = useCallback(async () => {
+    const [p, c] = await Promise.all([
+      supabase.from('nearby_promos').select('*').eq('business_id', business.id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('coupons').select('code').eq('business_id', business.id).eq('active', true),
+    ])
+    if (p.error) setMsg({ type: 'error', text: 'No pudimos cargar tus avisos.' })
+    else setList(p.data)
+    setCoupons(c.data || [])
+  }, [business.id])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function create(e) {
+    e.preventDefault()
+    setMsg(null)
+    const message = f.message.trim()
+    if (message.length < 3) return setMsg({ type: 'error', text: 'Escribe el mensaje del aviso.' })
+    if (!business.lat || !business.lng)
+      return setMsg({ type: 'error', text: 'Tu negocio necesita ubicación en el mapa. Agrégala en Mi perfil.' })
+    setBusy(true)
+    const { error } = await supabase.from('nearby_promos').insert({
+      business_id: business.id,
+      message,
+      coupon_code: f.code || null,
+      radius_m: Number(f.radius),
+      expires_at: new Date(Date.now() + Number(f.hours) * 3600000).toISOString(),
+    })
+    setBusy(false)
+    if (error)
+      return setMsg({
+        type: 'error',
+        text: error.message && error.message.length < 100 ? error.message : 'No pudimos crear el aviso.',
+      })
+    setF({ message: '', radius: '1000', hours: '24', code: '' })
+    setMsg({ type: 'ok', text: 'Aviso publicado. Lo verán los clientes que estén cerca con la app abierta.' })
+    load()
+  }
+
+  async function toggle(p) {
+    await supabase.from('nearby_promos').update({ active: !p.active }).eq('id', p.id)
+    load()
+  }
+
+  async function remove(p) {
+    if (!(await confirm('¿Eliminar este aviso?', 'Eliminar'))) return
+    await supabase.from('nearby_promos').delete().eq('id', p.id)
+    load()
+  }
+
+  const live = (p) => p.active && new Date(p.expires_at).getTime() > Date.now()
+
+  return (
+    <div className="stack">
+      {confirmUI}
+      <button type="button" className="link" onClick={onBack}>
+        Volver a herramientas
+      </button>
+      <h3 className="section-title" style={{ marginTop: 0 }}>
+        Aviso a clientes cercanos
+      </h3>
+      <p className="hint">
+        Publica una oferta y la verán los clientes que estén dentro del radio que elijas mientras tienen Bocado
+        abierto. No guardamos la ubicación de los clientes. Puedes tener hasta 3 avisos activos a la vez.
+      </p>
+      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+
+      <form className="card" onSubmit={create}>
+        <label className="field">
+          <span>Mensaje ({f.message.length}/140)</span>
+          <textarea
+            value={f.message}
+            maxLength={140}
+            rows={3}
+            placeholder="Por ejemplo: 2x1 en pizzas hasta las 6 pm"
+            onChange={(e) => setF({ ...f, message: e.target.value })}
+          />
+        </label>
+        <div className="field">
+          <span>¿Hasta qué distancia?</span>
+          <Select title="Distancia" value={f.radius} onChange={(v) => setF({ ...f, radius: v })} options={RADIUS} />
+        </div>
+        <div className="field">
+          <span>¿Cuánto tiempo dura?</span>
+          <Select title="Duración" value={f.hours} onChange={(v) => setF({ ...f, hours: v })} options={DURATION} />
+        </div>
+        {coupons.length > 0 && (
+          <div className="field">
+            <span>Código de descuento (opcional)</span>
+            <Select
+              title="Código"
+              value={f.code}
+              onChange={(v) => setF({ ...f, code: v })}
+              options={[{ value: '', label: 'Sin código' }, ...coupons.map((c) => ({ value: c.code, label: c.code }))]}
+            />
+          </div>
+        )}
+        <button className="btn" disabled={busy}>
+          {busy ? 'Publicando...' : 'Publicar aviso'}
+        </button>
+      </form>
+
+      {list && list.length === 0 && (
+        <div className="empty">
+          <strong>Aún no tienes avisos</strong>
+          Crea el primero arriba.
+        </div>
+      )}
+      <div className="list">
+        {(list || []).map((p) => (
+          <div className="card" key={p.id}>
+            <div className="row">
+              <h3 style={{ fontSize: 16 }}>{p.message}</h3>
+              <span className={`badge ${live(p) ? 'aprobado' : ''}`}>
+                {live(p) ? 'Activo' : p.active ? 'Vencido' : 'Pausado'}
+              </span>
+            </div>
+            <p className="meta">
+              Radio {p.radius_m < 1000 ? `${p.radius_m} m` : `${p.radius_m / 1000} km`}
+              {p.coupon_code ? ` - código ${p.coupon_code}` : ''}
+            </p>
+            <div className="order-actions">
+              <button className="btn small secondary" onClick={() => toggle(p)}>
+                {p.active ? 'Pausar' : 'Activar'}
+              </button>
+              <button className="btn small danger" onClick={() => remove(p)}>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

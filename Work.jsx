@@ -5,9 +5,11 @@ import { LiveMap } from './Map.jsx'
 import { playAlert } from './alert.js'
 import { MyProfile, BusinessProfile, SubscriptionBox } from './Profile.jsx'
 import { Select, TIME_OPTIONS, useConfirm, PillNav, SegNav } from './ui.jsx'
-import { CouponsManager, LoyaltyManager, ShareBusiness, PrioritySupport } from './Promos.jsx'
+import { CouponsManager, LoyaltyManager, ShareBusiness, PrioritySupport, NearbyManager } from './Promos.jsx'
 import { TierTools } from './Tools.jsx'
 import { CategoryManager } from './Categories.jsx'
+import { Cuadre } from './Cuadre.jsx'
+import { CourierInfo } from './CourierInfo.jsx'
 import { StatsDashboard, BlockedCustomers } from './Stats.jsx'
 import { ClipboardList, UtensilsCrossed, Wrench, UserCog, BarChart3 } from 'lucide-react'
 import './shop.css'
@@ -23,7 +25,7 @@ export function BusinessDashboard({ business, setBusiness }) {
 
   function openTool(id) {
     if (id === 'estadisticas') setTab('estadisticas')
-    else if (['cupones', 'habitual', 'bloqueos', 'enlace', 'soporte'].includes(id)) setTool(id)
+    else if (['cupones', 'habitual', 'bloqueos', 'enlace', 'soporte', 'cuadre', 'cercanos'].includes(id)) setTool(id)
     else if (id === 'horario') {
       setAccount('ajustes')
       setTab('cuenta')
@@ -59,6 +61,10 @@ export function BusinessDashboard({ business, setBusiness }) {
       )}
       {tab === 'herramientas' && !tool && (
         <TierTools kind="negocio" tier={business.tier} onOpen={openTool} onUpgrade={upgrade} />
+      )}
+      {tab === 'herramientas' && tool === 'cuadre' && <Cuadre business={business} onBack={() => setTool(null)} />}
+      {tab === 'herramientas' && tool === 'cercanos' && (
+        <NearbyManager business={business} onBack={() => setTool(null)} />
       )}
       {tab === 'herramientas' && tool === 'enlace' && (
         <ShareBusiness business={business} onBack={() => setTool(null)} />
@@ -250,7 +256,7 @@ function BusinessOrders({ business }) {
         </p>
 
         {o.delivery_mode === 'repartidor' && o.courier_id && o.status !== 'entregado' && o.status !== 'cancelado' && (
-          <p className="meta" style={{ fontWeight: 700 }}>Repartidor asignado</p>
+          <CourierInfo orderId={o.id} label="Repartidor" />
         )}
         {o.courier_id &&
           ['confirmado', 'en_fogones', 'listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta'].includes(o.status) && (
@@ -319,6 +325,7 @@ function BusinessOrders({ business }) {
 function ProductForm({ business, product, categories = [], onDone, onCancel }) {
   const [f, setF] = useState({
     category_id: product?.category_id || '',
+    stock: product?.stock ?? '',
     name: product?.name || '',
     price: product?.price ?? '',
     description: product?.description || '',
@@ -343,6 +350,8 @@ function ProductForm({ business, product, categories = [], onDone, onCancel }) {
       available: f.available,
     }
     if (categories.length > 0) row.category_id = f.category_id || null
+    row.stock = f.stock === '' ? null : Math.max(0, Math.floor(Number(f.stock)))
+    if (row.stock === 0) row.available = false
     setBusy(true)
     const { error } = product
       ? await supabase.from('products').update(row).eq('id', product.id)
@@ -384,6 +393,17 @@ function ProductForm({ business, product, categories = [], onDone, onCancel }) {
           />
         </div>
       )}
+      <label className="field">
+        <span>Cantidad disponible (opcional)</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="0"
+          value={f.stock}
+          placeholder="Vacío = sin control de cantidad"
+          onChange={(e) => setF({ ...f, stock: e.target.value })}
+        />
+      </label>
       <label className="check">
         <input
           type="checkbox"
@@ -532,6 +552,7 @@ function MenuManager({ business }) {
             <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               {!p.available && <span className="badge agotado">Agotado</span>}
               {p.has_delivery && <span className="badge propio">Envío incluido</span>}
+              {p.stock !== null && p.stock !== undefined && <span className="badge">Quedan {p.stock}</span>}
               {p.category_id && cats.find((c) => c.id === p.category_id) && (
                 <span className="badge">{cats.find((c) => c.id === p.category_id).name}</span>
               )}

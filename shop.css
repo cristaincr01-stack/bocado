@@ -1664,3 +1664,97 @@
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ------------------------------------------------------------------ */
+/* Repartidor con foto, cuadre, inventario y avisos cercanos           */
+/* ------------------------------------------------------------------ */
+
+.avatar-img {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #eef1f1;
+}
+
+.avatar-ph {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--turq) 16%, #fff);
+  color: var(--turq);
+  font-weight: 800;
+}
+
+.courier-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f4f6f6;
+}
+
+.courier-info small {
+  display: block;
+  color: var(--muted);
+}
+
+.docs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 6px;
+}
+
+.near-promo {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1.5px solid var(--mango);
+  border-radius: 18px;
+  background: #fff8e6;
+  color: #3d2b00;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.near-promo span {
+  font-size: 15px;
+}
+
+.near-promo em {
+  font-style: normal;
+  font-weight: 800;
+  color: #8a5a00;
+}
+
+.inv-row {
+  display: grid;
+  grid-template-columns: 1fr 96px auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.inv-row h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.inv-row input {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+}
+
+.inv-row .btn {
+  width: auto;
+}

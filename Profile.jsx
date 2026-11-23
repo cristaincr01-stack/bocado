@@ -28,6 +28,8 @@ const FEATURES = {
       'Cupones de descuento',
       'Cliente habitual (premios)',
       'Marcar productos agotados',
+      'Cuadre de ventas e inventario',
+      'Aviso a clientes cercanos',
       'Hasta 30 productos',
     ],
     pro: [
@@ -35,11 +37,9 @@ const FEATURES = {
       'Productos ilimitados',
       'Estadísticas de ventas',
       'Mejor posición en la lista',
-      'Aviso a clientes cercanos (próximamente)',
     ],
     premium: [
       'Todo lo Pro',
-      'Cuadre de ventas e inventario (próximamente)',
       'Sección Destacados',
       'Soporte prioritario',
     ],

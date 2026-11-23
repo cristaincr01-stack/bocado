@@ -8,6 +8,8 @@ const TOOLS = {
   negocio: [
     { id: 'cupones', min: 'basico', status: 'listo', Icon: Ticket, name: 'Códigos de descuento', text: 'Crea códigos para atraer clientes.', open: true },
     { id: 'habitual', min: 'basico', status: 'listo', Icon: Heart, name: 'Cliente habitual', text: 'Premia a quien te pide seguido.', open: true },
+    { id: 'cuadre', min: 'basico', status: 'listo', Icon: ClipboardList, name: 'Cuadre de ventas e inventario', text: 'Cierre del día y control de cantidades.', open: true },
+    { id: 'cercanos', min: 'basico', status: 'listo', Icon: BellRing, name: 'Aviso a clientes cercanos', text: 'Publica una oferta para quien esté cerca.', open: true },
     { id: 'horario', min: 'basico', status: 'listo', Icon: Clock, name: 'Horario automático', text: 'Abres y cierras solo según tu horario.', open: true },
     { id: 'agotados', min: 'basico', status: 'listo', Icon: PackageX, name: 'Marcar productos agotados', text: 'Un toque y el cliente lo ve agotado.', open: true },
     { id: 'posicion', min: 'pro', status: 'listo', Icon: TrendingUp, name: 'Mejor posición en la lista', text: 'Apareces antes que los negocios Básico.' },
@@ -15,9 +17,7 @@ const TOOLS = {
     { id: 'enlace', min: 'basico', status: 'listo', Icon: QrCode, name: 'Enlace y código QR', text: 'Comparte tu negocio por WhatsApp o imprime tu QR.', open: true },
     { id: 'categorias', min: 'pro', status: 'listo', Icon: Layers, name: 'Categorías del menú', text: 'Organiza tu menú: Completas, Bebidas, Postres...', open: true },
     { id: 'bloqueos', min: 'basico', status: 'listo', Icon: ShieldBan, name: 'Clientes bloqueados', text: 'Protege tu negocio de pedidos falsos.', open: true },
-    { id: 'cercanos', min: 'pro', status: 'pronto', Icon: BellRing, name: 'Aviso a clientes cercanos', text: 'Te mostramos a quien está cerca de tu negocio.' },
     { id: 'destacados', min: 'premium', status: 'listo', Icon: Star, name: 'Sección Destacados', text: 'Apareces arriba, en la sección de destacados.' },
-    { id: 'cuadre', min: 'premium', status: 'pronto', Icon: ClipboardList, name: 'Cuadre de ventas e inventario', text: 'Controla lo que vendes y lo que te queda.' },
     { id: 'soporte', min: 'premium', status: 'listo', Icon: Headset, name: 'Soporte prioritario', text: 'Te atendemos primero por WhatsApp.', open: true },
   ],
   repartidor: [

@@ -211,6 +211,7 @@ export function HomeScreen({ onOpen, onSurprise }) {
   const [pos, setPos] = useState(null)
   const [geoMsg, setGeoMsg] = useState('')
   const [askGeo, geoUI] = useGeoConsent()
+  const [promos, setPromos] = useState([])
 
   useEffect(() => {
     loadVisibleBusinesses().then(setItems)
@@ -236,6 +237,13 @@ export function HomeScreen({ onOpen, onSurprise }) {
       /* sin almacenamiento */
     }
   }, [locate])
+
+  useEffect(() => {
+    if (!pos) return
+    supabase.rpc('nearby_promos_for', { p_lat: pos.lat, p_lng: pos.lng }).then(({ data }) => {
+      if (Array.isArray(data)) setPromos(data)
+    })
+  }, [pos])
 
   const rank = { premium: 2, pro: 1, basico: 0 }
   const withDist = useMemo(
@@ -308,6 +316,20 @@ export function HomeScreen({ onOpen, onSurprise }) {
           </span>
         </button>
       )}
+
+      {promos
+        .filter((p) => (items || []).some((b) => b.id === p.business_id))
+        .map((p) => (
+          <button
+            key={p.id}
+            className="near-promo"
+            onClick={() => onOpen((items || []).find((b) => b.id === p.business_id))}
+          >
+            <b>{p.business_name} · a {distText(Number(p.distance_m) / 1000)}</b>
+            <span>{p.message}</span>
+            {p.coupon_code && <em>Usa el código {p.coupon_code}</em>}
+          </button>
+        ))}
 
       {browsing && (
         <button className="promo" onClick={onSurprise}>

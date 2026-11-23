@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike, Users, PackageCheck, User, Wrench } from 'lucide-react'
 import { TierTools } from './Tools.jsx'
 import { PrioritySupport } from './Promos.jsx'
+import { CourierDocs, AdminCourierDocs } from './CourierInfo.jsx'
 import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
@@ -305,6 +306,7 @@ function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
         <div className="stack">
           <MyProfile role="repartidor" />
           <CourierProfile courier={courier} setCourier={setCourier} />
+          <CourierDocs courier={courier} setCourier={setCourier} />
           <SubscriptionBox kind="repartidor" />
         </div>
       )}
@@ -437,6 +439,7 @@ export function CourierPanel({ profile }) {
           Tu solicitud no fue aprobada. Contáctanos para revisar tus datos.
         </div>
       )}
+      {courier.verification_status !== 'aprobado' && <CourierDocs courier={courier} setCourier={setCourier} />}
       {courier.verification_status === 'aprobado' && (
         <SubscriptionGate kind="repartidor" profileId={profile.id}>
           <CourierTabs
@@ -526,6 +529,8 @@ function VerifyRow({ kind, item, tiers, onSaved, done }) {
         </div>
       )}
 
+      {kind === 'repartidor' && <AdminCourierDocs item={item} />}
+
       <div className="adm-controls">
         <Select
           title="Estado"
@@ -584,7 +589,7 @@ export function AdminPanel() {
         .order('created_at', { ascending: false }),
       supabase
         .from('couriers')
-        .select('id, vehicle, display_name, verification_status, tier, profile:profiles(full_name, phone)')
+        .select('id, vehicle, display_name, photo_path, id_card_path, verification_status, tier, profile:profiles(full_name, phone)')
         .order('created_at', { ascending: false }),
       supabase
         .from('subscription_payments')
