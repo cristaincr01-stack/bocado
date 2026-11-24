@@ -212,6 +212,7 @@ export function HomeScreen({ onOpen, onSurprise }) {
   const [geoMsg, setGeoMsg] = useState('')
   const [askGeo, geoUI] = useGeoConsent()
   const [promos, setPromos] = useState([])
+  const [favs, setFavs] = useState(new Set())
 
   useEffect(() => {
     loadVisibleBusinesses().then(setItems)
@@ -239,6 +240,13 @@ export function HomeScreen({ onOpen, onSurprise }) {
   }, [locate])
 
   useEffect(() => {
+    supabase
+      .from('favorite_businesses')
+      .select('business_id')
+      .then(({ data }) => setFavs(new Set((data || []).map((r) => r.business_id))))
+  }, [])
+
+  useEffect(() => {
     if (!pos) return
     supabase.rpc('nearby_promos_for', { p_lat: pos.lat, p_lng: pos.lng }).then(({ data }) => {
       if (Array.isArray(data)) setPromos(data)
@@ -258,7 +266,8 @@ export function HomeScreen({ onOpen, onSurprise }) {
   const filtered = withDist
     .filter((b) => {
       if (chip === 'abiertos' && !b.is_open) return false
-      if (chip !== 'todos' && chip !== 'abiertos' && b.category !== chip) return false
+      if (chip === 'favoritos' && !favs.has(b.id)) return false
+      if (chip !== 'todos' && chip !== 'abiertos' && chip !== 'favoritos' && b.category !== chip) return false
       const q = query.trim().toLowerCase()
       return !q || `${b.name} ${b.category || ''}`.toLowerCase().includes(q)
     })
@@ -283,6 +292,7 @@ export function HomeScreen({ onOpen, onSurprise }) {
   const chips = [
     ['todos', 'Todos'],
     ['abiertos', 'Abiertos ahora'],
+    ...(favs.size > 0 ? [['favoritos', 'Favoritos']] : []),
     ...CATEGORIES.map((c) => [c, c]),
   ]
 

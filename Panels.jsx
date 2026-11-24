@@ -3,6 +3,7 @@ import { MapPin, LayoutDashboard, ClipboardCheck, Wallet, Tag, Lock, Store, Bike
 import { TierTools } from './Tools.jsx'
 import { PrioritySupport } from './Promos.jsx'
 import { CourierDocs, AdminCourierDocs } from './CourierInfo.jsx'
+import { CourierEarnings } from './Earnings.jsx'
 import { supabase } from './lib.js'
 import { CustomerApp } from './Shop.jsx'
 import { BusinessDashboard, CourierWork } from './Work.jsx'
@@ -269,6 +270,7 @@ function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
       <PillNav
         items={[
           { id: 'entregas', label: 'Entregas', Icon: Bike },
+          { id: 'ganancias', label: 'Ganancias', Icon: Wallet },
           { id: 'herramientas', label: 'Herramientas', Icon: Wrench },
           { id: 'perfil', label: 'Mi perfil', Icon: User },
         ]}
@@ -293,11 +295,12 @@ function CourierTabs({ courier, setCourier, msg, toggleOnline }) {
           <CourierWork courier={courier} />
         </>
       )}
+      {tab === 'ganancias' && <CourierEarnings courier={courier} onUpgrade={() => setTab('perfil')} />}
       {tab === 'herramientas' && !support && (
         <TierTools
           kind="repartidor"
           tier={courier.tier}
-          onOpen={(id) => id === 'soporte' && setSupport(true)}
+          onOpen={(id) => (id === 'soporte' ? setSupport(true) : setTab('ganancias'))}
           onUpgrade={() => setTab('perfil')}
         />
       )}

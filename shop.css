@@ -1758,3 +1758,21 @@
 .inv-row .btn {
   width: auto;
 }
+
+.fav-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.fav-btn.on {
+  border-color: #e0536b;
+  color: #e0536b;
+}

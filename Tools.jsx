@@ -23,13 +23,13 @@ const TOOLS = {
   repartidor: [
     { id: 'mapa', min: 'basico', status: 'listo', Icon: MapIcon, name: 'Mapa y ruta', text: 'Ves el destino de cada entrega.' },
     { id: 'radio3', min: 'basico', status: 'listo', Icon: Gauge, name: 'Radio de 3 km', text: 'Recibes ofertas de pedidos cercanos.' },
-    { id: 'dia', min: 'basico', status: 'pronto', Icon: Route, name: 'Historial y ganancias del día', text: 'Cuánto llevas ganado hoy.' },
+    { id: 'dia', min: 'basico', status: 'listo', Icon: Route, name: 'Historial y ganancias del día', text: 'Cuánto llevas ganado hoy.', open: true },
     { id: 'radio5', min: 'pro', status: 'listo', Icon: Gauge, name: 'Radio de 5 km', text: 'Recibes ofertas de pedidos hasta 5 km.' },
     { id: 'antes', min: 'pro', status: 'listo', Icon: TrendingUp, name: 'Ofertas antes que los Básico', text: 'Te eligen antes que a los Básico.' },
-    { id: 'semana', min: 'pro', status: 'pronto', Icon: BarChart3, name: 'Ganancias por semana y mes', text: 'Tu resumen de ingresos.' },
+    { id: 'semana', min: 'pro', status: 'listo', Icon: BarChart3, name: 'Ganancias por semana y mes', text: 'Tu resumen de ingresos.', open: true },
     { id: 'radio8', min: 'premium', status: 'listo', Icon: Gauge, name: 'Radio de 8 km', text: 'El mayor alcance: pedidos hasta 8 km.' },
     { id: 'prioridad', min: 'premium', status: 'listo', Icon: Medal, name: 'Primera prioridad en ofertas', text: 'Te eligen primero, antes que Pro y Básico.' },
-    { id: 'rendimiento', min: 'premium', status: 'pronto', Icon: BarChart3, name: 'Estadísticas de rendimiento', text: 'Entregas, tiempos y calificación.' },
+    { id: 'rendimiento', min: 'premium', status: 'listo', Icon: BarChart3, name: 'Estadísticas de rendimiento', text: 'Entregas, promedio y calificación.', open: true },
     { id: 'soporte', min: 'premium', status: 'listo', Icon: Headset, name: 'Soporte prioritario', text: 'Te atendemos primero por WhatsApp.', open: true },
   ],
 }

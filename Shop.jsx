@@ -84,6 +84,16 @@ export function CustomerApp() {
     setTab('inicio')
   }
 
+  function reorder(biz, lines) {
+    const next = {}
+    lines.forEach((l) => (next[l.product.id] = { product: l.product, qty: l.qty }))
+    setBusiness(biz)
+    setCart(next)
+    setCheckout(false)
+    setNotice('')
+    setTab('inicio')
+  }
+
   function placed(extra) {
     setCart({})
     setCheckout(false)
@@ -118,7 +128,7 @@ export function CustomerApp() {
         />
       )}
       {tab === 'sorprende' && <SurpriseScreen onCombo={startCombo} />}
-      {tab === 'pedidos' && <MyOrders notice={notice} onOpenBusiness={openBusiness} />}
+      {tab === 'pedidos' && <MyOrders notice={notice} onOpenBusiness={openBusiness} onReorder={reorder} />}
       {tab === 'perfil' && <MyProfile />}
 
       {!inStore && (
@@ -156,6 +166,7 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
   const [products, setProducts] = useState(null)
   const [cats, setCats] = useState([])
   const [catFilter, setCatFilter] = useState('todos')
+  const [fav, setFav] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -175,7 +186,22 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
         else setProducts(data.slice().sort((x, y) => Number(y.available) - Number(x.available)))
       })
     supabase.rpc('loyalty_status', { p_business: business.id }).then(({ data }) => setLoyalty(data || null))
+    supabase
+      .from('favorite_businesses')
+      .select('business_id')
+      .eq('business_id', business.id)
+      .maybeSingle()
+      .then(({ data }) => setFav(!!data))
   }, [business.id])
+
+  async function toggleFav() {
+    const next = !fav
+    setFav(next)
+    const { error: err } = next
+      ? await supabase.from('favorite_businesses').insert({ business_id: business.id })
+      : await supabase.from('favorite_businesses').delete().eq('business_id', business.id)
+    if (err) setFav(!next)
+  }
 
   const atStock = (p) => p.stock !== null && p.stock !== undefined && (cart[p.id]?.qty || 0) >= p.stock
   const add = (p) => {
@@ -203,6 +229,15 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
       <div className="greeting" style={{ marginBottom: 14 }}>
         <h2 style={{ fontSize: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
           {business.name} <VerifiedBadge tier={business.tier} size={22} />
+          <button
+            type="button"
+            className={`fav-btn ${fav ? 'on' : ''}`}
+            aria-pressed={fav}
+            aria-label={fav ? 'Quitar de favoritos' : 'Guardar en favoritos'}
+            onClick={toggleFav}
+          >
+            <Heart size={22} fill={fav ? 'currentColor' : 'none'} />
+          </button>
         </h2>
         <p>{[business.category, business.address].filter(Boolean).join(' - ')}</p>
       </div>
@@ -587,7 +622,7 @@ function sumTotals(rows) {
   return rows.reduce((t, o) => t + Number(o.total || 0), 0)
 }
 
-function MyOrders({ notice, onOpenBusiness }) {
+function MyOrders({ notice, onOpenBusiness, onReorder }) {
   const [reviewing, setReviewing] = useState(null)
   const [reviews, setReviews] = useState({})
   const [uid, setUid] = useState(null)
@@ -642,6 +677,28 @@ function MyOrders({ notice, onOpenBusiness }) {
     })
     if (err) setError('No se pudo cancelar el pedido.')
     else load()
+  }
+
+  async function reorder(o) {
+    setError('')
+    const list = await loadVisibleBusinesses(true)
+    const biz = (list || []).find((b) => b.id === o.business?.id)
+    if (!biz) return setError('Este negocio no está disponible ahora.')
+    const { data: prods } = await supabase
+      .from('products')
+      .select('*')
+      .eq('business_id', biz.id)
+      .eq('available', true)
+    const lines = o.order_items
+      .map((i) => {
+        const p = (prods || []).find((x) => x.name === i.product_name)
+        if (!p) return null
+        const qty = p.stock !== null && p.stock !== undefined ? Math.min(i.quantity, p.stock) : i.quantity
+        return qty > 0 ? { product: p, qty } : null
+      })
+      .filter(Boolean)
+    if (lines.length === 0) return setError('Esos productos ya no están disponibles.')
+    onReorder(biz, lines)
   }
 
   const dateText = (ts) =>
@@ -765,6 +822,9 @@ function MyOrders({ notice, onOpenBusiness }) {
                 Valorar pedido
               </button>
             )}
+            <button className="btn small" onClick={() => reorder(o)}>
+              Pedir otra vez
+            </button>
           </div>
         )}
       </div>
