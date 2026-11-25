@@ -10,6 +10,7 @@ import { TierTools } from './Tools.jsx'
 import { CategoryManager } from './Categories.jsx'
 import { Cuadre } from './Cuadre.jsx'
 import { CourierInfo } from './CourierInfo.jsx'
+import { distanceKm } from './Home.jsx'
 import { StatsDashboard, BlockedCustomers } from './Stats.jsx'
 import { ClipboardList, UtensilsCrossed, Wrench, UserCog, BarChart3 } from 'lucide-react'
 import './shop.css'
@@ -814,6 +815,93 @@ function BusinessSettings({ business, setBusiness }) {
 
 const ACTIVE = ['confirmado', 'en_fogones', 'listo_para_salir', 'rumbo_a_ti', 'a_la_vuelta']
 
+function mapLink(lat, lng, text) {
+  const q = lat != null && lng != null ? `${lat},${lng}` : encodeURIComponent(text || '')
+  return `https://www.google.com/maps/search/?api=1&query=${q}`
+}
+
+function km1(v) {
+  return v == null ? null : v < 1 ? `${Math.round(v * 1000)} m` : `${v.toFixed(1)} km`
+}
+
+function OfferCard({ offer, courier, busy, onAccept, onPass }) {
+  const o = offer.order
+  const b = o.business || {}
+  const hasDest = o.delivery_lat != null && o.delivery_lng != null
+  const hasBiz = b.lat != null && b.lng != null
+  const me = courier.lat != null && courier.lng != null ? { lat: courier.lat, lng: courier.lng } : null
+  const toBiz = me && hasBiz ? distanceKm(me, { lat: b.lat, lng: b.lng }) : null
+  const toDest = hasBiz && hasDest ? distanceKm({ lat: b.lat, lng: b.lng }, { lat: o.delivery_lat, lng: o.delivery_lng }) : null
+  const total = toBiz != null && toDest != null ? toBiz + toDest : null
+  const fee = Number(o.delivery_fee || 0)
+
+  return (
+    <div className="card offer">
+      <div className="offer-top">
+        <div>
+          <small>Pago por esta entrega</small>
+          <b className="offer-fee">{fee > 0 ? money(fee) : 'Sin tarifa'}</b>
+        </div>
+        {total != null && (
+          <span className="offer-km">
+            {km1(total)}
+            <small>recorrido</small>
+          </span>
+        )}
+      </div>
+
+      <div className="offer-route">
+        <div className="stop">
+          <span className="dot a" />
+          <div>
+            <small>Recoges en {b.name}</small>
+            <p>{b.address || 'Sin dirección'}</p>
+            <div className="stop-meta">
+              {toBiz != null && <span>A {km1(toBiz)} de ti</span>}
+              <a href={mapLink(b.lat, b.lng, b.address)} target="_blank" rel="noreferrer">
+                Ver en el mapa
+              </a>
+            </div>
+          </div>
+        </div>
+        <div className="stop">
+          <span className="dot b" />
+          <div>
+            <small>Entregas en</small>
+            <p>{o.delivery_address || 'El cliente no escribió dirección'}</p>
+            <div className="stop-meta">
+              {toDest != null && <span>A {km1(toDest)} del negocio</span>}
+              {hasDest || o.delivery_address ? (
+                <a href={mapLink(o.delivery_lat, o.delivery_lng, o.delivery_address)} target="_blank" rel="noreferrer">
+                  Ver en el mapa
+                </a>
+              ) : null}
+            </div>
+            {!hasDest && <p className="hint">El cliente no marcó su ubicación en el mapa: guíate por la dirección escrita.</p>}
+          </div>
+        </div>
+      </div>
+
+      {o.total != null && (
+        <p className="meta">
+          Total del pedido: {money(o.total)}
+          {o.payment_method ? ` · Pago: ${o.payment_method}` : ''}
+        </p>
+      )}
+      {fee === 0 && <div className="notice">Este pedido no tiene tarifa de envío. Revisa antes de aceptar.</div>}
+
+      <div className="order-actions">
+        <button className="btn" disabled={busy} onClick={onAccept}>
+          Aceptar pedido
+        </button>
+        <button className="btn secondary" onClick={onPass}>
+          Pasar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function CourierWork({ courier }) {
   const online = courier.is_online
   const [offers, setOffers] = useState([])
@@ -821,13 +909,14 @@ export function CourierWork({ courier }) {
   const [msg, setMsg] = useState('')
   const [busyId, setBusyId] = useState(null)
   const knownOffers = useRef(null)
+  const [passed, setPassed] = useState(() => new Set())
 
   const load = useCallback(async () => {
     const [o, j] = await Promise.all([
       supabase
         .from('order_offers')
         .select(
-          'id, order:orders(id, status, delivery_address, delivery_fee, business:businesses(name, address))'
+          'id, order:orders(id, status, delivery_address, delivery_lat, delivery_lng, delivery_fee, total, payment_method, business:businesses(name, address, lat, lng))'
         )
         .eq('courier_id', courier.id)
         .eq('status', 'pendiente'),
@@ -933,18 +1022,18 @@ export function CourierWork({ courier }) {
       )}
       {online && (
         <div className="list">
-          {offers.map((offer) => (
-            <div className="card" key={offer.id}>
-              <h3>{offer.order.business?.name}</h3>
-              <p className="meta">Recoges en: {offer.order.business?.address}</p>
-              <p className="meta">Envío: {money(offer.order.delivery_fee)}</p>
-              <div className="order-actions">
-                <button className="btn" disabled={busyId === offer.id} onClick={() => accept(offer)}>
-                  Aceptar pedido
-                </button>
-              </div>
-            </div>
-          ))}
+          {offers
+            .filter((offer) => !passed.has(offer.id))
+            .map((offer) => (
+              <OfferCard
+                key={offer.id}
+                offer={offer}
+                courier={courier}
+                busy={busyId === offer.id}
+                onAccept={() => accept(offer)}
+                onPass={() => setPassed(new Set([...passed, offer.id]))}
+              />
+            ))}
         </div>
       )}
       {!online && jobs.length === 0 && (

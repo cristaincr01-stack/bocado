@@ -1776,3 +1776,350 @@
   border-color: #e0536b;
   color: #e0536b;
 }
+
+/* ------------------------------------------------------------------ */
+/* Cuadre por turnos, ganancias y ofertas del repartidor               */
+/* ------------------------------------------------------------------ */
+
+.shift-hero {
+  display: grid;
+  gap: 4px;
+  padding: 20px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--turq), color-mix(in srgb, var(--turq) 70%, #000));
+  color: #fff;
+}
+
+.shift-hero small {
+  opacity: 0.85;
+}
+
+.shift-hero b {
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.shift-hero span {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.shift-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.shift-actions button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shift-actions button svg {
+  color: var(--turq);
+}
+
+.shift-result {
+  display: grid;
+  gap: 2px;
+  padding: 16px;
+  border-radius: 18px;
+  text-align: center;
+}
+
+.shift-result b {
+  font-size: 28px;
+}
+
+.shift-result.ok {
+  background: #e7f6ee;
+  color: #145c38;
+}
+
+.shift-result.plus {
+  background: #fff8e6;
+  color: #7a5200;
+}
+
+.shift-result.minus {
+  background: #fdecea;
+  color: #8c1d18;
+}
+
+.entry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.entry-row:first-of-type {
+  border-top: 0;
+}
+
+.entry-row small {
+  display: block;
+  color: var(--muted);
+}
+
+.entry-row button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: #f1f3f3;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.sale-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sale-row h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.plain-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.sticky-total {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.sticky-total small {
+  display: block;
+  color: var(--muted);
+}
+
+.sticky-total b {
+  font-size: 22px;
+}
+
+.sticky-total .btn {
+  width: auto;
+  min-width: 120px;
+}
+
+.counter-row {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.counter-row small {
+  min-width: 70px;
+  text-align: right;
+  color: var(--muted);
+}
+
+.hist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hist-row h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.hist-side {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.earn-hero {
+  display: grid;
+  gap: 6px;
+  padding: 22px 20px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--turq), color-mix(in srgb, var(--turq) 70%, #000));
+  color: #fff;
+}
+
+.earn-hero small {
+  opacity: 0.85;
+}
+
+.earn-hero b {
+  font-size: 38px;
+  line-height: 1.05;
+}
+
+.earn-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.earn-pills span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 14px;
+}
+
+.perf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.perf-grid div {
+  display: grid;
+  gap: 2px;
+}
+
+.perf-grid small {
+  color: var(--muted);
+}
+
+.perf-grid b {
+  font-size: 20px;
+}
+
+.perf-grid span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.day-head span {
+  font-weight: 800;
+  color: var(--turq);
+}
+
+.offer-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.offer-top small {
+  display: block;
+  color: var(--muted);
+}
+
+.offer-fee {
+  font-size: 28px;
+  color: var(--turq);
+}
+
+.offer-km {
+  display: grid;
+  justify-items: end;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.offer-km small {
+  font-weight: 500;
+}
+
+.offer-route {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0;
+  padding-left: 4px;
+}
+
+.offer .stop {
+  display: flex;
+  gap: 12px;
+}
+
+.offer .stop p {
+  margin: 2px 0;
+}
+
+.offer .stop small {
+  color: var(--muted);
+}
+
+.offer .dot {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  border-radius: 50%;
+}
+
+.offer .dot.a {
+  background: var(--turq);
+}
+
+.offer .dot.b {
+  background: var(--mango);
+}
+
+.stop-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.stop-meta a {
+  color: var(--turq);
+  font-weight: 700;
+}

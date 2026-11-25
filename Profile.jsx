@@ -28,7 +28,7 @@ const FEATURES = {
       'Cupones de descuento',
       'Cliente habitual (premios)',
       'Marcar productos agotados',
-      'Cuadre de ventas e inventario',
+      'Cuadre de caja por turnos e inventario',
       'Aviso a clientes cercanos',
       'Hasta 30 productos',
     ],
