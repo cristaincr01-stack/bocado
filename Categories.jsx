@@ -31,12 +31,11 @@ export function CategoryManager({ business, onBack }) {
     setMsg(null)
     const n = name.trim()
     if (!n) return
-    const sort = (list || []).reduce((m, c) => Math.max(m, c.sort), 0) + 1
-    const { error } = await supabase.from('menu_categories').insert({ business_id: business.id, name: n, sort })
+    const { error } = await supabase.rpc('create_menu_category', { p_business: business.id, p_name: n })
     if (error)
       return setMsg({
         type: 'error',
-        text: error.code === '23505' ? 'Ya tienes una categoría con ese nombre.' : 'No pudimos crear la categoría.',
+        text: error.message && error.message.length < 140 ? error.message : 'No pudimos crear la categoría.',
       })
     setName('')
     load()

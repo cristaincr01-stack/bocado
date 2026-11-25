@@ -7,7 +7,9 @@ import { VerifiedBadge } from './Verified.jsx'
 import { MyProfile } from './Profile.jsx'
 import { BottomNav, useGeoConsent } from './ui.jsx'
 import { CourierInfo } from './CourierInfo.jsx'
-import { HomeScreen, SurpriseScreen, ReviewSheet, SimilarBusinesses, loadVisibleBusinesses } from './Home.jsx'
+import { CustomerMenu } from './MenuView.jsx'
+import { logoPhoto, etaRange } from './media.js'
+import { HomeScreen, SurpriseScreen, ReviewSheet, SimilarBusinesses, loadVisibleBusinesses, distanceKm } from './Home.jsx'
 import './shop.css'
 
 const STEPS_PICKUP = ['enviado', 'confirmado', 'en_fogones', 'listo_para_salir', 'entregado']
@@ -228,6 +230,7 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
       </button>
       <div className="greeting" style={{ marginBottom: 14 }}>
         <h2 style={{ fontSize: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {business.logo_path && <img className="menu-logo" src={logoPhoto(business.logo_path)} alt="" />}
           {business.name} <VerifiedBadge tier={business.tier} size={22} />
           <button
             type="button"
@@ -276,72 +279,17 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
         </div>
       )}
 
-      {cats.length > 0 && products && products.length > 0 && (
-        <div className="menu-cats" role="tablist" aria-label="Categorías del menú">
-          <button aria-pressed={catFilter === 'todos'} onClick={() => setCatFilter('todos')}>
-            Todo
-          </button>
-          {cats
-            .filter((c) => products.some((p) => p.category_id === c.id))
-            .map((c) => (
-              <button key={c.id} aria-pressed={catFilter === c.id} onClick={() => setCatFilter(c.id)}>
-                {c.name}
-              </button>
-            ))}
-          {products.some((p) => !p.category_id) && (
-            <button aria-pressed={catFilter === 'otros'} onClick={() => setCatFilter('otros')}>
-              Más productos
-            </button>
-          )}
-        </div>
+      {products && products.length > 0 && (
+        <CustomerMenu
+          products={products}
+          cats={cats}
+          cart={cart}
+          business={business}
+          add={add}
+          remove={remove}
+          atStock={atStock}
+        />
       )}
-
-      <div className="list">
-        {(products || [])
-          .filter((p) =>
-            catFilter === 'todos' ? true : catFilter === 'otros' ? !p.category_id : p.category_id === catFilter
-          )
-          .sort(
-            (x, y) =>
-              Number(y.available) - Number(x.available) ||
-              (cats.findIndex((c) => c.id === x.category_id) + 1 || 999) -
-                (cats.findIndex((c) => c.id === y.category_id) + 1 || 999)
-          )
-          .map((p) => (
-          <div className={`card product ${p.available ? '' : 'soldout'}`} key={p.id}>
-            <div className="info">
-              <h3>{p.name}</h3>
-              {p.description && <p className="meta">{p.description}</p>}
-              <p className="price">{money(p.price)}</p>
-              {p.has_delivery && <span className="badge propio">Envío incluido</span>}
-              {!p.available && <span className="badge agotado">Agotado</span>}
-              {p.available && p.stock !== null && p.stock !== undefined && p.stock <= 5 && (
-                <span className="badge">{p.stock <= 3 ? 'Últimas unidades' : `Quedan ${p.stock}`}</span>
-              )}
-            </div>
-            <div className="qty">
-              {p.available && cart[p.id] && (
-                <>
-                  <button aria-label="Quitar uno" onClick={() => remove(p)}>
-                    <Minus size={18} />
-                  </button>
-                  <b>{cart[p.id].qty}</b>
-                </>
-              )}
-              {p.available && (
-                <button
-                  className="add"
-                  aria-label="Agregar uno"
-                  onClick={() => add(p)}
-                  disabled={!business.is_open || atStock(p)}
-                >
-                  <Plus size={18} />
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
 
       {count > 0 && (
         <div className="cartbar">
@@ -377,6 +325,7 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
   const [couponMsg, setCouponMsg] = useState(null)
   const [loyalty, setLoyalty] = useState(null)
   const [useReward, setUseReward] = useState(false)
+  const [waNumber, setWaNumber] = useState('')
 
   useEffect(() => {
     supabase.rpc('loyalty_status', { p_business: business.id }).then(({ data }) => {
@@ -460,6 +409,8 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
 
     if (error) {
       setBusy(false)
+      const { data: bw } = await supabase.from('businesses').select('whatsapp').eq('id', business.id).maybeSingle()
+      if (bw && bw.whatsapp) setWaNumber(bw.whatsapp)
       const text = error.message && error.message.length < 100 ? error.message : 'No pudimos enviar tu pedido. Inténtalo de nuevo.'
       return setMsg({ type: 'error', text })
     }
@@ -609,6 +560,23 @@ function Checkout({ business, cart, me, onBack, onPlaced }) {
       </p>
 
       {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+      {waNumber && (
+        <a
+          className="btn secondary"
+          style={{ marginBottom: 10 }}
+          target="_blank"
+          rel="noreferrer"
+          href={`https://wa.me/${waNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
+            `Hola, quiero hacer este pedido en ${business.name}:\n` +
+              lines.map((l) => `${l.qty} x ${l.product.name}`).join('\n') +
+              `\nTotal: ${money(total)}` +
+              (type === 'domicilio' ? `\nDirección: ${address}` : '\nRecojo en el local') +
+              `\nNombre: ${name}  Teléfono: ${phone}`
+          )}`}
+        >
+          Continuar por WhatsApp
+        </a>
+      )}
       <button className="btn" disabled={busy}>
         {busy ? 'Enviando...' : `Hacer pedido - ${money(total)}`}
       </button>
@@ -640,7 +608,7 @@ function MyOrders({ notice, onOpenBusiness, onReorder }) {
       supabase
         .from('orders')
         .select(
-          'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, discount, coupon_code, reward_note, cancelled_by, created_at, business:businesses(id, name, category, tier, lat, lng), order_items(id, product_name, quantity)'
+          'id, status, delivery_type, delivery_mode, courier_id, delivery_lat, delivery_lng, total, discount, coupon_code, reward_note, cancelled_by, created_at, business:businesses(id, name, category, tier, lat, lng, prep_minutes), order_items(id, product_name, quantity)'
         )
         .eq('customer_id', uid)
         .order('created_at', { ascending: false })
@@ -728,6 +696,16 @@ function MyOrders({ notice, onOpenBusiness, onReorder }) {
         </ul>
         {Number(o.discount) > 0 && <p className="meta discount-line">Descuento: -{money(o.discount)}</p>}
         <p className="meta">Total: {money(o.total)}</p>
+        {['enviado', 'confirmado', 'en_fogones'].includes(o.status) && o.business && (
+          <p className="meta" style={{ fontWeight: 700 }}>
+            Tiempo estimado:{' '}
+            {o.delivery_type === 'recogida'
+              ? etaRange(o.business.prep_minutes, 0)
+              : o.business.lat != null && o.delivery_lat != null
+                ? etaRange(o.business.prep_minutes, distanceKm({ lat: o.business.lat, lng: o.business.lng }, { lat: o.delivery_lat, lng: o.delivery_lng }))
+                : `${o.business.prep_minutes || 20} min de preparación más el trayecto`}
+          </p>
+        )}
 
         <ul className="steps">
           {steps.map((st, i) => (

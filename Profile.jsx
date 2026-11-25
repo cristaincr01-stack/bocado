@@ -846,40 +846,46 @@ export function PricingAdmin() {
 
 
 function SupportSetting() {
-  const [value, setValue] = useState('')
+  const [support, setSupport] = useState('')
+  const [limit, setLimit] = useState('')
   const [msg, setMsg] = useState(null)
 
   useEffect(() => {
     supabase
       .from('app_settings')
-      .select('value')
-      .eq('key', 'support_whatsapp')
-      .maybeSingle()
-      .then(({ data }) => setValue(data?.value || ''))
+      .select('key, value')
+      .in('key', ['support_whatsapp', 'new_customer_limit'])
+      .then(({ data }) => {
+        for (const r of data || []) {
+          if (r.key === 'support_whatsapp') setSupport(r.value || '')
+          if (r.key === 'new_customer_limit') setLimit(r.value || '')
+        }
+      })
   }, [])
 
   async function save() {
     setMsg(null)
-    const { error } = await supabase.rpc('admin_set_setting', { p_key: 'support_whatsapp', p_value: value.trim() })
-    setMsg(error ? { type: 'error', text: 'No se pudo guardar.' } : { type: 'ok', text: 'Número guardado.' })
+    const a = await supabase.rpc('admin_set_setting', { p_key: 'support_whatsapp', p_value: support.trim() })
+    const b = await supabase.rpc('admin_set_setting', { p_key: 'new_customer_limit', p_value: limit.trim() })
+    setMsg(a.error || b.error ? { type: 'error', text: 'No se pudo guardar.' } : { type: 'ok', text: 'Ajustes guardados.' })
   }
 
   return (
     <div className="card">
-      <h3>Soporte prioritario</h3>
+      <h3>Ajustes de la app</h3>
       <label className="field">
-        <span>WhatsApp de soporte (con código de país)</span>
-        <input
-          value={value}
-          inputMode="tel"
-          placeholder="Por ejemplo: 5355555555"
-          onChange={(e) => setValue(e.target.value)}
-        />
+        <span>WhatsApp de soporte prioritario (con código de país)</span>
+        <input value={support} inputMode="tel" placeholder="Por ejemplo: 5355555555" onChange={(e) => setSupport(e.target.value)} />
       </label>
       <p className="hint">Solo lo ven los negocios y repartidores con plan Premium activo.</p>
+      <label className="field">
+        <span>Monto máximo del primer pedido de un cliente nuevo (CUP)</span>
+        <input value={limit} inputMode="numeric" placeholder="Vacío = sin límite" onChange={(e) => setLimit(e.target.value)} />
+      </label>
+      <p className="hint">Protege a los negocios de pedidos falsos grandes. Tras su primer pedido entregado, el límite deja de aplicar.</p>
       {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
       <button className="btn small" onClick={save}>
-        Guardar número
+        Guardar ajustes
       </button>
     </div>
   )

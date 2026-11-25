@@ -11,6 +11,8 @@ import {
   Share2,
   Banknote,
   Trash2,
+  Users,
+  UserPlus,
 } from 'lucide-react'
 import { supabase } from './lib.js'
 import { money } from './utils.js'
@@ -40,11 +42,13 @@ function reportText(s, bizName) {
   const L = []
   L.push(`CIERRE DE TURNO - ${bizName}`)
   L.push(`${dateLong(s.opened_at)}, ${hour(s.opened_at)} a ${s.closed_at ? hour(s.closed_at) : 'ahora'}`)
+  if (s.workers && s.workers.length) L.push(`Trabajaron: ${s.workers.join(', ')}`)
   L.push('')
   L.push(`Efectivo al abrir: ${money(s.opening_cash)}`)
   L.push(`Ventas del mostrador: ${money(s.physical.total)} (${s.physical.count})`)
   L.push(`Pedidos de la app: ${money(s.online.total)} (${s.online.count})`)
   L.push(`VENTAS TOTALES: ${money(s.total_sales)} - ${s.tickets} tickets`)
+  if (Number(s.profit) > 0) L.push(`Ganancia estimada: ${money(s.profit)}`)
   L.push('')
   for (const m of s.physical.by_method) L.push(`Mostrador ${m.method}: ${money(m.total)}`)
   for (const m of s.online.by_method) L.push(`App ${m.method}: ${money(m.total)}`)
@@ -87,6 +91,11 @@ function ShiftReport({ s, bizName }) {
         </div>
       )}
 
+      {s.workers && s.workers.length > 0 && (
+        <p className="hint" style={{ margin: 0 }}>
+          <Users size={14} /> Trabajaron: <b>{s.workers.join(', ')}</b>
+        </p>
+      )}
       <div className="st-grid">
         <div className="st-kpi">
           <div className="st-kpi-top"><span>Ventas totales</span></div>
@@ -97,7 +106,26 @@ function ShiftReport({ s, bizName }) {
           <div className="st-kpi-top"><span>Ticket promedio</span></div>
           <b>{money(s.avg_ticket)}</b>
         </div>
+        <div className="st-kpi">
+          <div className="st-kpi-top"><span>Ganancia estimada</span></div>
+          <b>{Number(s.profit) > 0 ? money(s.profit) : '-'}</b>
+          <span className="st-sub">productos con costo</span>
+        </div>
       </div>
+
+      {s.by_worker && s.by_worker.length > 0 && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Ventas por trabajador</h3>
+          {s.by_worker.map((w) => (
+            <div className="sum-line" key={w.worker}>
+              <span>
+                {w.worker} <small className="muted">({w.count})</small>
+              </span>
+              <b>{money(w.total)}</b>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Cuadre de efectivo</h3>
@@ -202,12 +230,13 @@ function CashCounter({ onUse }) {
 }
 
 /* ---------- nueva venta de mostrador ---------- */
-function SaleForm({ business, shiftId, onDone, onCancel }) {
+function SaleForm({ business, shiftId, workers = [], onDone, onCancel }) {
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState({})
   const [quick, setQuick] = useState('')
   const [method, setMethod] = useState('efectivo')
   const [note, setNote] = useState('')
+  const [worker, setWorker] = useState(workers.length === 1 ? workers[0] : '')
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -247,9 +276,10 @@ function SaleForm({ business, shiftId, onDone, onCancel }) {
       p_amount: lines.length > 0 ? null : Number(quick),
       p_method: method,
       p_note: note.trim() || null,
+      p_worker: worker || null,
     })
     setBusy(false)
-    if (error) return setMsg({ type: 'error', text: 'No pudimos guardar la venta.' })
+    if (error) return setMsg({ type: 'error', text: `No pudimos guardar la venta. ${error.message || ''}`.slice(0, 160) })
     onDone()
   }
 
@@ -307,6 +337,17 @@ function SaleForm({ business, shiftId, onDone, onCancel }) {
         <span>Método de pago</span>
         <Select title="Método de pago" value={method} onChange={setMethod} options={METHODS} />
       </div>
+      {workers.length > 0 && (
+        <div className="field">
+          <span>¿Quién vendió?</span>
+          <Select
+            title="Trabajador"
+            value={worker}
+            onChange={setWorker}
+            options={[{ value: '', label: 'Sin indicar' }, ...workers.map((w) => ({ value: w, label: w }))]}
+          />
+        </div>
+      )}
       <label className="field">
         <span>Nota (opcional)</span>
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={80} />
@@ -402,7 +443,7 @@ function CloseForm({ shift, bizName, onClosed, onCancel }) {
       p_note: note.trim() || null,
     })
     setBusy(false)
-    if (error) return setMsg({ type: 'error', text: 'No pudimos cerrar el turno.' })
+    if (error) return setMsg({ type: 'error', text: `No pudimos cerrar el turno. ${error.message || ''}`.slice(0, 200) })
     onClosed(data)
   }
 
@@ -458,12 +499,137 @@ function CloseForm({ shift, bizName, onClosed, onCancel }) {
   )
 }
 
+
+/* ---------- trabajadores del turno ---------- */
+function WorkersPicker({ business, value, onChange }) {
+  const [staff, setStaff] = useState([])
+  const [name, setName] = useState('')
+  const [msg, setMsg] = useState(null)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('business_staff')
+      .select('id, name')
+      .eq('business_id', business.id)
+      .eq('active', true)
+      .order('name')
+    setStaff(data || [])
+  }, [business.id])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const toggle = (n) => onChange(value.includes(n) ? value.filter((x) => x !== n) : [...value, n])
+
+  async function add() {
+    setMsg(null)
+    const n = name.trim()
+    if (!n) return
+    const { error } = await supabase.from('business_staff').insert({ business_id: business.id, name: n })
+    if (error && error.code !== '23505') return setMsg('No pudimos agregar a la persona.')
+    setName('')
+    if (!value.includes(n)) onChange([...value, n])
+    load()
+  }
+
+  return (
+    <div className="field">
+      <span>¿Quién trabaja en este turno?</span>
+      {staff.length > 0 && (
+        <div className="h-quick">
+          {staff.map((p) => (
+            <button type="button" key={p.id} aria-pressed={value.includes(p.name)} onClick={() => toggle(p.name)}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="coupon-row">
+        <input
+          value={name}
+          maxLength={40}
+          placeholder={staff.length ? 'Agregar a otra persona' : 'Nombre del trabajador'}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button type="button" className="btn small secondary" onClick={add}>
+          <UserPlus size={16} /> Agregar
+        </button>
+      </div>
+      {msg && <div className="msg error">{msg}</div>}
+    </div>
+  )
+}
+
+function Team({ business }) {
+  const [staff, setStaff] = useState(null)
+  const [name, setName] = useState('')
+  const [msg, setMsg] = useState(null)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('business_staff')
+      .select('id, name, active')
+      .eq('business_id', business.id)
+      .order('name')
+    setStaff(data || [])
+  }, [business.id])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function add(e) {
+    e.preventDefault()
+    setMsg(null)
+    const n = name.trim()
+    if (!n) return
+    const { error } = await supabase.from('business_staff').insert({ business_id: business.id, name: n })
+    if (error) return setMsg(error.code === '23505' ? 'Ya existe esa persona.' : 'No pudimos agregarla.')
+    setName('')
+    load()
+  }
+
+  async function toggle(p) {
+    await supabase.from('business_staff').update({ active: !p.active }).eq('id', p.id)
+    load()
+  }
+
+  return (
+    <div className="stack">
+      <p className="hint">
+        Anota a las personas que trabajan en tu negocio. Al abrir cada turno eliges quién está, y los reportes muestran
+        cuánto vendió cada uno.
+      </p>
+      <form className="card" onSubmit={add}>
+        <label className="field">
+          <span>Nueva persona</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="Nombre" />
+        </label>
+        {msg && <div className="msg error">{msg}</div>}
+        <button className="btn small">Agregar</button>
+      </form>
+      <div className="list">
+        {(staff || []).map((p) => (
+          <div className="card row" key={p.id}>
+            <h3 style={{ margin: 0 }}>{p.name}</h3>
+            <button className="btn small secondary" style={{ width: 'auto' }} onClick={() => toggle(p)}>
+              {p.active ? 'Quitar del equipo' : 'Volver a activar'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* ---------- pantalla del turno ---------- */
 function Turno({ business }) {
   const [confirm, confirmUI] = useConfirm()
   const [live, setLive] = useState(undefined)
   const [view, setView] = useState('main')
   const [opening, setOpening] = useState('')
+  const [workers, setWorkers] = useState([])
   const [counter, setCounter] = useState(false)
   const [closedReport, setClosedReport] = useState(null)
   const [msg, setMsg] = useState(null)
@@ -497,7 +663,7 @@ function Turno({ business }) {
     setMsg(null)
     if (opening === '' || Number(opening) < 0) return setMsg({ type: 'error', text: 'Escribe el efectivo con el que abres la caja (puede ser 0).' })
     setBusy(true)
-    const { error } = await supabase.rpc('shift_open', { p_business: business.id, p_opening: Number(opening) })
+    const { error } = await supabase.rpc('shift_open', { p_business: business.id, p_opening: Number(opening), p_workers: workers })
     setBusy(false)
     if (error) return setMsg({ type: 'error', text: error.message && error.message.length < 100 ? error.message : 'No pudimos abrir el turno.' })
     setClosedReport(null)
@@ -535,6 +701,7 @@ function Turno({ business }) {
         <p className="hint">
           Al abrir el turno llevamos tus ventas del mostrador y los pedidos de la app en un solo cuadre, hasta que lo cierres.
         </p>
+        <WorkersPicker business={business} value={workers} onChange={setWorkers} />
         <label className="field">
           <span>Efectivo con el que abres la caja (CUP)</span>
           <input type="number" inputMode="decimal" min="0" value={opening} onChange={(e) => setOpening(e.target.value)} />
@@ -563,6 +730,7 @@ function Turno({ business }) {
       <SaleForm
         business={business}
         shiftId={live.id}
+        workers={s.workers || []}
         onCancel={() => setView('main')}
         onDone={() => {
           setView('main')
@@ -570,6 +738,8 @@ function Turno({ business }) {
         }}
       />
     )
+  if (view === 'team')
+    return <TeamEditor business={business} shiftId={live.id} current={s.workers || []} onDone={() => { setView('main'); load() }} />
   if (['gasto', 'retiro', 'aporte'].includes(view))
     return (
       <MoveForm
@@ -590,7 +760,8 @@ function Turno({ business }) {
         onCancel={() => setView('main')}
         onClosed={(report) => {
           setView('main')
-          setClosedReport(report)
+          if (report) setClosedReport(report)
+          else setMsg({ type: 'ok', text: 'Turno cerrado. Lo encuentras en la pestaña Historial.' })
           load()
         }}
       />
@@ -605,6 +776,9 @@ function Turno({ business }) {
         <span>
           {s.tickets} tickets · Efectivo esperado {money(s.expected_cash)}
         </span>
+        <button type="button" className="hero-link" onClick={() => setView('team')}>
+          <Users size={15} /> {s.workers && s.workers.length ? s.workers.join(', ') : 'Indicar quién trabaja'}
+        </button>
       </div>
 
       <div className="shift-actions">
@@ -696,20 +870,56 @@ function Turno({ business }) {
   )
 }
 
+
+function TeamEditor({ business, shiftId, current, onDone }) {
+  const [value, setValue] = useState(current)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+  async function save() {
+    setBusy(true)
+    const { error } = await supabase.rpc('shift_set_workers', { p_shift: shiftId, p_workers: value })
+    setBusy(false)
+    if (error) return setMsg('No pudimos guardar el equipo.')
+    onDone()
+  }
+  return (
+    <div className="stack">
+      <button type="button" className="link" onClick={onDone}>
+        <ArrowLeft size={18} /> Volver al turno
+      </button>
+      <h3 className="section-title" style={{ marginTop: 0 }}>Equipo del turno</h3>
+      <WorkersPicker business={business} value={value} onChange={setValue} />
+      {msg && <div className="msg error">{msg}</div>}
+      <button className="btn" disabled={busy} onClick={save}>
+        {busy ? 'Guardando...' : 'Guardar'}
+      </button>
+    </div>
+  )
+}
+
 /* ---------- historial ---------- */
 function History({ business }) {
   const [list, setList] = useState(null)
   const [open, setOpen] = useState(null)
 
+  const openRow = async (t) => {
+    if (t.summary) return setOpen(t)
+    const { data } = await supabase.rpc('shift_report', { p_shift: t.id })
+    setOpen({ ...t, summary: data })
+  }
+
   useEffect(() => {
-    supabase
-      .from('shifts')
-      .select('id, opened_at, closed_at, summary')
-      .eq('business_id', business.id)
-      .eq('status', 'cerrado')
-      .order('closed_at', { ascending: false })
-      .limit(40)
-      .then(({ data }) => setList(data || []))
+    supabase.rpc('shifts_history', { p_business: business.id }).then(({ data, error }) => {
+      if (!error && Array.isArray(data)) return setList(data)
+      supabase
+        .from('shifts')
+        .select('id, opened_at, closed_at, summary')
+        .eq('business_id', business.id)
+        .eq('status', 'cerrado')
+        .order('closed_at', { ascending: false })
+        .limit(40)
+        .then((r) => setList(r.data || []))
+    })
   }, [business.id])
 
   if (open)
@@ -741,11 +951,12 @@ function History({ business }) {
         {(list || []).map((t) => {
           const d = t.summary && t.summary.difference !== null ? Number(t.summary.difference) : null
           return (
-            <button className="card hist-row" key={t.id} onClick={() => setOpen(t)}>
+            <button className="card hist-row" key={t.id} onClick={() => openRow(t)}>
               <div>
                 <h3>{dateLong(t.opened_at)}</h3>
                 <span className="meta">
                   {hour(t.opened_at)} a {hour(t.closed_at)} · {t.summary?.tickets ?? 0} tickets
+                  {t.summary?.workers && t.summary.workers.length ? ` · ${t.summary.workers.join(', ')}` : ''}
                 </span>
               </div>
               <div className="hist-side">
@@ -759,86 +970,6 @@ function History({ business }) {
             </button>
           )
         })}
-      </div>
-    </div>
-  )
-}
-
-/* ---------- inventario ---------- */
-function Inventory({ business }) {
-  const [items, setItems] = useState(null)
-  const [values, setValues] = useState({})
-  const [msg, setMsg] = useState(null)
-
-  const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, stock, available')
-      .eq('business_id', business.id)
-      .order('name')
-    if (error) return setMsg({ type: 'error', text: 'No pudimos cargar tu inventario.' })
-    setItems(data)
-    setValues(Object.fromEntries(data.map((p) => [p.id, p.stock === null ? '' : String(p.stock)])))
-  }, [business.id])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  async function save(p) {
-    setMsg(null)
-    const raw = values[p.id]
-    const stock = raw === '' ? null : Math.max(0, Math.floor(Number(raw)))
-    if (raw !== '' && Number.isNaN(stock)) return setMsg({ type: 'error', text: 'Escribe un número válido.' })
-    const change = { stock }
-    if (stock === 0) change.available = false
-    if (stock !== null && stock > 0 && p.stock === 0) change.available = true
-    const { error } = await supabase.from('products').update(change).eq('id', p.id)
-    if (error) return setMsg({ type: 'error', text: 'No pudimos guardar la cantidad.' })
-    setMsg({ type: 'ok', text: `${p.name}: guardado.` })
-    load()
-  }
-
-  const low = (items || []).filter((p) => p.stock !== null && p.stock <= 3)
-
-  return (
-    <div className="stack">
-      <p className="hint">
-        Escribe cuántas unidades tienes de cada producto. Bajan solas cuando vendes (en la app o en el mostrador) y al llegar a cero el
-        producto se marca como agotado. Déjalo vacío si no llevas control de ese producto.
-      </p>
-      {low.length > 0 && (
-        <div className="notice">Quedan pocas unidades de: {low.map((p) => `${p.name} (${p.stock})`).join(', ')}.</div>
-      )}
-      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
-      {items === null && <p>Cargando...</p>}
-      {items && items.length === 0 && (
-        <div className="empty">
-          <strong>Aún no tienes productos</strong>
-          Agrégalos en la pestaña Menú.
-        </div>
-      )}
-      <div className="list">
-        {(items || []).map((p) => (
-          <div className="card inv-row" key={p.id}>
-            <div className="inv-name">
-              <h3>{p.name}</h3>
-              <span className="meta">{p.stock === null ? 'Sin control' : `Quedan ${p.stock}`}</span>
-            </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="0"
-              value={values[p.id] ?? ''}
-              placeholder="Sin control"
-              onChange={(e) => setValues({ ...values, [p.id]: e.target.value })}
-              aria-label={`Cantidad de ${p.name}`}
-            />
-            <button className="btn small" onClick={() => save(p)}>
-              Guardar
-            </button>
-          </div>
-        ))}
       </div>
     </div>
   )
@@ -858,14 +989,14 @@ export function Cuadre({ business, onBack }) {
         items={[
           { id: 'turno', label: 'Turno' },
           { id: 'historial', label: 'Historial' },
-          { id: 'inventario', label: 'Inventario' },
+          { id: 'equipo', label: 'Equipo' },
         ]}
         value={tab}
         onChange={setTab}
       />
       {tab === 'turno' && <Turno business={business} />}
       {tab === 'historial' && <History business={business} />}
-      {tab === 'inventario' && <Inventory business={business} />}
+      {tab === 'equipo' && <Team business={business} />}
     </div>
   )
 }

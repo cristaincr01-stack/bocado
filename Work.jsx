@@ -4,11 +4,13 @@ import { money, useRealtime } from './utils.js'
 import { LiveMap } from './Map.jsx'
 import { playAlert } from './alert.js'
 import { MyProfile, BusinessProfile, SubscriptionBox } from './Profile.jsx'
-import { Select, TIME_OPTIONS, useConfirm, PillNav, SegNav } from './ui.jsx'
+import { Select, TIME_OPTIONS, useConfirm, PillNav, SegNav, FilePick } from './ui.jsx'
 import { CouponsManager, LoyaltyManager, ShareBusiness, PrioritySupport, NearbyManager } from './Promos.jsx'
 import { TierTools } from './Tools.jsx'
 import { CategoryManager } from './Categories.jsx'
 import { Cuadre } from './Cuadre.jsx'
+import { InventoryTool } from './Inventory.jsx'
+import { uploadImage, productPhoto, logoPhoto } from './media.js'
 import { CourierInfo } from './CourierInfo.jsx'
 import { distanceKm } from './Home.jsx'
 import { StatsDashboard, BlockedCustomers } from './Stats.jsx'
@@ -26,7 +28,7 @@ export function BusinessDashboard({ business, setBusiness }) {
 
   function openTool(id) {
     if (id === 'estadisticas') setTab('estadisticas')
-    else if (['cupones', 'habitual', 'bloqueos', 'enlace', 'soporte', 'cuadre', 'cercanos'].includes(id)) setTool(id)
+    else if (['cupones', 'habitual', 'bloqueos', 'enlace', 'soporte', 'cuadre', 'cercanos', 'inventario'].includes(id)) setTool(id)
     else if (id === 'horario') {
       setAccount('ajustes')
       setTab('cuenta')
@@ -64,6 +66,9 @@ export function BusinessDashboard({ business, setBusiness }) {
         <TierTools kind="negocio" tier={business.tier} onOpen={openTool} onUpgrade={upgrade} />
       )}
       {tab === 'herramientas' && tool === 'cuadre' && <Cuadre business={business} onBack={() => setTool(null)} />}
+      {tab === 'herramientas' && tool === 'inventario' && (
+        <InventoryTool business={business} onBack={() => setTool(null)} />
+      )}
       {tab === 'herramientas' && tool === 'cercanos' && (
         <NearbyManager business={business} onBack={() => setTool(null)} />
       )}
@@ -323,8 +328,14 @@ function BusinessOrders({ business }) {
 
 /* ---------- Menú ---------- */
 
-function ProductForm({ business, product, categories = [], onDone, onCancel }) {
+function ProductForm({ business, product, categories = [], canCats = false, onCats, onDone, onCancel }) {
+  const [cats, setCats] = useState(categories)
+  const [newCat, setNewCat] = useState(null)
+  const [photo, setPhoto] = useState(null)
   const [f, setF] = useState({
+    cost: product?.cost ?? '',
+    min_stock: product?.min_stock ?? '',
+    unit: product?.unit || '',
     category_id: product?.category_id || '',
     stock: product?.stock ?? '',
     name: product?.name || '',
@@ -350,16 +361,36 @@ function ProductForm({ business, product, categories = [], onDone, onCancel }) {
       has_delivery: f.has_delivery,
       available: f.available,
     }
-    if (categories.length > 0) row.category_id = f.category_id || null
+    if (canCats) row.category_id = f.category_id || null
     row.stock = f.stock === '' ? null : Math.max(0, Math.floor(Number(f.stock)))
     if (row.stock === 0) row.available = false
+    row.cost = f.cost === '' ? null : Math.max(0, Number(f.cost))
+    row.min_stock = f.min_stock === '' ? 0 : Math.max(0, Math.floor(Number(f.min_stock)))
+    row.unit = f.unit.trim() || null
     setBusy(true)
+    try {
+      if (photo) row.photo_path = await uploadImage('product-photos', business.id, photo, 900)
+    } catch (e) {
+      setBusy(false)
+      return setMsg(`No pudimos subir la foto. ${e && e.message ? e.message : ''}`.slice(0, 160))
+    }
     const { error } = product
       ? await supabase.from('products').update(row).eq('id', product.id)
       : await supabase.from('products').insert({ ...row, business_id: business.id })
     setBusy(false)
-    if (error) setMsg('No pudimos guardar el producto. Inténtalo de nuevo.')
+    if (error) setMsg(error.message && error.message.length < 120 ? error.message : 'No pudimos guardar el producto. Inténtalo de nuevo.')
     else onDone()
+  }
+
+  async function createCat() {
+    const n = (newCat || '').trim()
+    if (!n) return
+    const { data, error } = await supabase.rpc('create_menu_category', { p_business: business.id, p_name: n })
+    if (error) return setMsg(error.message && error.message.length < 140 ? error.message : 'No pudimos crear la categoría.')
+    const list = onCats ? await onCats() : cats
+    setCats(list)
+    setF((cur) => ({ ...cur, category_id: data }))
+    setNewCat(null)
   }
 
   return (
@@ -383,17 +414,51 @@ function ProductForm({ business, product, categories = [], onDone, onCancel }) {
         <span>Descripción (opcional)</span>
         <textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
       </label>
-      {categories.length > 0 && (
+      {canCats && (
         <div className="field">
           <span>Categoría</span>
-          <Select
-            title="Categoría del producto"
-            value={f.category_id}
-            onChange={(v) => setF({ ...f, category_id: v })}
-            options={[{ value: '', label: 'Sin categoría' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
-          />
+          <div className="coupon-row">
+            <div style={{ flex: 1 }}>
+              <Select
+                title="Categoría del producto"
+                value={f.category_id}
+                onChange={(v) => setF({ ...f, category_id: v })}
+                options={[{ value: '', label: 'Sin categoría' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
+              />
+            </div>
+            <button type="button" className="btn small secondary" aria-label="Crear categoría" onClick={() => setNewCat(newCat === null ? '' : null)}>
+              +
+            </button>
+          </div>
+          {newCat !== null && (
+            <div className="coupon-row" style={{ marginTop: 8 }}>
+              <input value={newCat} maxLength={40} placeholder="Nombre de la categoría" onChange={(e) => setNewCat(e.target.value)} />
+              <button type="button" className="btn small" onClick={createCat}>
+                Crear
+              </button>
+            </div>
+          )}
         </div>
       )}
+      <div className="field">
+        <span>Foto del producto (opcional)</span>
+        {product?.photo_path && !photo && <img className="form-photo" src={productPhoto(product.photo_path)} alt="" />}
+        <FilePick file={photo} onChange={setPhoto} text={product?.photo_path ? 'Cambiar foto' : 'Tomar o elegir foto'} />
+      </div>
+      <div className="grid2">
+        <label className="field">
+          <span>Costo (CUP)</span>
+          <input type="number" inputMode="decimal" min="0" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} />
+        </label>
+        <label className="field">
+          <span>Unidad (opcional)</span>
+          <input value={f.unit} maxLength={12} placeholder="u, lb, kg..." onChange={(e) => setF({ ...f, unit: e.target.value })} />
+        </label>
+      </div>
+      <label className="field">
+        <span>Stock mínimo (aviso para reponer)</span>
+        <input type="number" inputMode="numeric" min="0" value={f.min_stock} onChange={(e) => setF({ ...f, min_stock: e.target.value })} />
+      </label>
       <label className="field">
         <span>Cantidad disponible (opcional)</span>
         <input
@@ -506,6 +571,12 @@ function MenuManager({ business }) {
         <ProductForm
           business={business}
           categories={canCats ? cats : []}
+          canCats={canCats}
+          onCats={async () => {
+            const c = await supabase.from('menu_categories').select('id, name, sort').eq('business_id', business.id).order('sort')
+            setCats(c.data || [])
+            return c.data || []
+          }}
           product={editing === 'new' ? null : editing}
           onDone={done}
           onCancel={() => setEditing(null)}
@@ -553,7 +624,7 @@ function MenuManager({ business }) {
             <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               {!p.available && <span className="badge agotado">Agotado</span>}
               {p.has_delivery && <span className="badge propio">Envío incluido</span>}
-              {p.stock !== null && p.stock !== undefined && <span className="badge">Quedan {p.stock}</span>}
+              {p.stock !== null && p.stock !== undefined && <span className="badge">Quedan {p.stock}{p.unit ? ` ${p.unit}` : ''}</span>}
               {p.category_id && cats.find((c) => c.id === p.category_id) && (
                 <span className="badge">{cats.find((c) => c.id === p.category_id).name}</span>
               )}
@@ -741,6 +812,66 @@ function ScheduleEditor({ business, setBusiness }) {
   )
 }
 
+
+function BusinessExtras({ business, setBusiness }) {
+  const [logo, setLogo] = useState(null)
+  const [prep, setPrep] = useState(String(business.prep_minutes || 20))
+  const [wa, setWa] = useState(business.whatsapp || '')
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    setMsg(null)
+    setBusy(true)
+    try {
+      const path = logo ? await uploadImage('business-logos', business.id, logo, 500) : business.logo_path || null
+      const { error } = await supabase.rpc('update_business_extras', {
+        p_business: business.id,
+        p_logo: path,
+        p_prep: Number(prep),
+        p_whatsapp: wa.trim() || null,
+      })
+      if (error) throw error
+      setBusiness({ ...business, logo_path: path, prep_minutes: Number(prep), whatsapp: wa.trim() || null })
+      setLogo(null)
+      setMsg({ type: 'ok', text: 'Datos guardados.' })
+    } catch (e) {
+      setMsg({ type: 'error', text: `No pudimos guardar. ${e && e.message ? e.message : ''}`.slice(0, 180) })
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="card">
+      <h3 className="section-title" style={{ marginTop: 0 }}>Imagen y atención</h3>
+      <div className="field">
+        <span>Logo del negocio</span>
+        {business.logo_path && !logo && <img className="form-photo logo" src={logoPhoto(business.logo_path)} alt="" />}
+        <FilePick file={logo} onChange={setLogo} text={business.logo_path ? 'Cambiar logo' : 'Subir logo'} />
+      </div>
+      <div className="field">
+        <span>Tiempo de preparación</span>
+        <Select
+          title="Tiempo de preparación"
+          value={prep}
+          onChange={setPrep}
+          options={[10, 15, 20, 30, 40, 60].map((m) => ({ value: String(m), label: `${m} minutos` }))}
+        />
+        <p className="hint">Con esto calculamos el tiempo estimado que ve el cliente.</p>
+      </div>
+      <label className="field">
+        <span>WhatsApp del negocio (con código de país)</span>
+        <input value={wa} inputMode="tel" placeholder="Por ejemplo: 5355555555" onChange={(e) => setWa(e.target.value)} />
+        <p className="hint">Si falla la conexión, el cliente puede enviarte el pedido por WhatsApp.</p>
+      </label>
+      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+      <button className="btn small" disabled={busy} onClick={save}>
+        {busy ? 'Guardando...' : 'Guardar'}
+      </button>
+    </div>
+  )
+}
+
 function BusinessSettings({ business, setBusiness }) {
   const [fee, setFee] = useState(business.courier_fee ?? 0)
   const [msg, setMsg] = useState(null)
@@ -784,6 +915,8 @@ function BusinessSettings({ business, setBusiness }) {
       </button>
       {business.schedule && <p className="hint">Horario automático activo.</p>}
       {openMsg && <div className={`msg ${openMsg.type}`}>{openMsg.text}</div>}
+
+      <BusinessExtras business={business} setBusiness={setBusiness} />
 
       <ScheduleEditor business={business} setBusiness={setBusiness} />
 

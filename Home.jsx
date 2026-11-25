@@ -3,6 +3,7 @@ import { Search, MapPin, Star, Sparkles, Clock, Bike, RefreshCw, ShoppingBag } f
 import { supabase } from './lib.js'
 import { money, getPosition } from './utils.js'
 import { VerifiedBadge } from './Verified.jsx'
+import { logoPhoto, etaRange } from './media.js'
 import { Select, Sheet, Stars, useGeoConsent } from './ui.jsx'
 import { buildCombos } from './combo.js'
 
@@ -57,7 +58,7 @@ function BizCard({ b, onOpen, km, tile }) {
   return (
     <button className={`biz ${tile ? 'tile' : ''} ${b.is_open ? '' : 'closed'}`} onClick={() => onOpen(b)}>
       <div className="biz-cover">
-        <span>{initial}</span>
+        {b.logo_path ? <img src={logoPhoto(b.logo_path)} alt="" loading="lazy" /> : <span>{initial}</span>}
       </div>
       <div className="biz-body">
         <div className="biz-head">
@@ -66,7 +67,7 @@ function BizCard({ b, onOpen, km, tile }) {
           </h3>
           <em className={`biz-state ${b.is_open ? 'open' : ''}`}>{b.is_open ? 'Abierto' : 'Cerrado'}</em>
         </div>
-        <p className="meta">{[b.category, km != null ? distText(km) : ''].filter(Boolean).join(' - ')}</p>
+        <p className="meta">{[b.category, km != null ? distText(km) : '', b.is_open ? etaRange(b.prep_minutes, km) : ''].filter(Boolean).join(' - ')}</p>
         <p className="meta biz-line">
           <Rating b={b} />
           <span>
@@ -100,7 +101,7 @@ function FeaturedCard({ b, km, onOpen }) {
       </div>
 
       <div className="feat-main">
-        <div className="feat-logo">{initial}</div>
+        <div className="feat-logo">{b.logo_path ? <img src={logoPhoto(b.logo_path)} alt="" loading="lazy" /> : initial}</div>
         <div className="feat-info">
           <div className="feat-name">
             <h3>{b.name}</h3>
@@ -109,7 +110,7 @@ function FeaturedCard({ b, km, onOpen }) {
           </div>
           <p className="feat-meta">
             <MapPin size={14} />
-            {[b.category, b.address, km != null ? distText(km) : ''].filter(Boolean).join(' - ')}
+            {[b.category, b.address, km != null ? distText(km) : '', b.is_open ? etaRange(b.prep_minutes, km) : ''].filter(Boolean).join(' - ')}
           </p>
         </div>
       </div>

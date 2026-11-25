@@ -75,7 +75,8 @@ export function CourierDocs({ courier, setCourier }) {
       setCard(null)
       setMsg({ type: 'ok', text: 'Documentos guardados.' })
     } catch (e) {
-      setMsg({ type: 'error', text: 'No pudimos subir los documentos. Inténtalo de nuevo.' })
+      const detail = e && e.message ? e.message : ''
+      setMsg({ type: 'error', text: `No pudimos subir los documentos. ${detail}`.slice(0, 200) })
     }
     setBusy(false)
   }
