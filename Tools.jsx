@@ -1,4 +1,4 @@
-import { Lock, Ticket, Heart, Clock, PackageX, TrendingUp, BarChart3, BellRing, Star, ClipboardList, Headset, Map as MapIcon, Route, Gauge, Medal, ShieldBan, Layers, QrCode, Boxes } from 'lucide-react'
+import { Lock, Ticket, Heart, Clock, PackageX, TrendingUp, BarChart3, BellRing, Star, ClipboardList, Headset, Map as MapIcon, Route, Gauge, Medal, ShieldBan, Layers, QrCode, Boxes, CalendarDays } from 'lucide-react'
 
 const RANK = { basico: 0, pro: 1, premium: 2 }
 const NAME = { basico: 'Básico', pro: 'Pro', premium: 'Premium' }
@@ -9,6 +9,7 @@ const TOOLS = {
     { id: 'cupones', min: 'basico', status: 'listo', Icon: Ticket, name: 'Códigos de descuento', text: 'Crea códigos para atraer clientes.', open: true },
     { id: 'habitual', min: 'basico', status: 'listo', Icon: Heart, name: 'Cliente habitual', text: 'Premia a quien te pide seguido.', open: true },
     { id: 'inventario', min: 'basico', status: 'listo', Icon: Boxes, name: 'Inventario', text: 'Entradas, salidas, costos y ganancia por producto.', open: true },
+    { id: 'reservas', min: 'basico', status: 'listo', Icon: CalendarDays, name: 'Mesas y reservas', text: 'Mesas con sillas, reservas en línea o en el local, y adelanto.', open: true },
     { id: 'cuadre', min: 'basico', status: 'listo', Icon: ClipboardList, name: 'Cuadre de caja', text: 'Turnos, ventas del mostrador, gastos, equipo y cierre.', open: true },
     { id: 'cercanos', min: 'basico', status: 'listo', Icon: BellRing, name: 'Aviso a clientes cercanos', text: 'Publica una oferta para quien esté cerca.', open: true },
     { id: 'horario', min: 'basico', status: 'listo', Icon: Clock, name: 'Horario automático', text: 'Abres y cierras solo según tu horario.', open: true },

@@ -9,7 +9,9 @@ import { CouponsManager, LoyaltyManager, ShareBusiness, PrioritySupport, NearbyM
 import { TierTools } from './Tools.jsx'
 import { CategoryManager } from './Categories.jsx'
 import { Cuadre } from './Cuadre.jsx'
+import { ReservasManager } from './Reservas.jsx'
 import { InventoryTool } from './Inventory.jsx'
+import { ScanButton } from './Scanner.jsx'
 import { uploadImage, productPhoto, logoPhoto } from './media.js'
 import { CourierInfo } from './CourierInfo.jsx'
 import { distanceKm } from './Home.jsx'
@@ -28,7 +30,7 @@ export function BusinessDashboard({ business, setBusiness }) {
 
   function openTool(id) {
     if (id === 'estadisticas') setTab('estadisticas')
-    else if (['cupones', 'habitual', 'bloqueos', 'enlace', 'soporte', 'cuadre', 'cercanos', 'inventario'].includes(id)) setTool(id)
+    else if (['cupones', 'habitual', 'bloqueos', 'enlace', 'soporte', 'cuadre', 'cercanos', 'inventario', 'reservas'].includes(id)) setTool(id)
     else if (id === 'horario') {
       setAccount('ajustes')
       setTab('cuenta')
@@ -66,6 +68,7 @@ export function BusinessDashboard({ business, setBusiness }) {
         <TierTools kind="negocio" tier={business.tier} onOpen={openTool} onUpgrade={upgrade} />
       )}
       {tab === 'herramientas' && tool === 'cuadre' && <Cuadre business={business} onBack={() => setTool(null)} />}
+      {tab === 'herramientas' && tool === 'reservas' && <ReservasManager business={business} onBack={() => setTool(null)} />}
       {tab === 'herramientas' && tool === 'inventario' && (
         <InventoryTool business={business} onBack={() => setTool(null)} />
       )}
@@ -341,6 +344,8 @@ function ProductForm({ business, product, categories = [], canCats = false, onCa
     name: product?.name || '',
     price: product?.price ?? '',
     description: product?.description || '',
+    barcode: product?.barcode || '',
+    sku: product?.sku || '',
     has_delivery: product?.has_delivery || false,
     available: product?.available ?? true,
   })
@@ -367,6 +372,8 @@ function ProductForm({ business, product, categories = [], canCats = false, onCa
     row.cost = f.cost === '' ? null : Math.max(0, Number(f.cost))
     row.min_stock = f.min_stock === '' ? 0 : Math.max(0, Math.floor(Number(f.min_stock)))
     row.unit = f.unit.trim() || null
+    row.barcode = f.barcode.trim() || null
+    row.sku = f.sku.trim() || null
     setBusy(true)
     try {
       if (photo) row.photo_path = await uploadImage('product-photos', business.id, photo, 900)
@@ -378,7 +385,14 @@ function ProductForm({ business, product, categories = [], canCats = false, onCa
       ? await supabase.from('products').update(row).eq('id', product.id)
       : await supabase.from('products').insert({ ...row, business_id: business.id })
     setBusy(false)
-    if (error) setMsg(error.message && error.message.length < 120 ? error.message : 'No pudimos guardar el producto. Inténtalo de nuevo.')
+    if (error)
+      setMsg(
+        error.code === '23505'
+          ? 'Ese código de barras o SKU ya está en otro producto.'
+          : error.message && error.message.length < 120
+            ? error.message
+            : 'No pudimos guardar el producto. Inténtalo de nuevo.'
+      )
     else onDone()
   }
 
@@ -413,6 +427,22 @@ function ProductForm({ business, product, categories = [], canCats = false, onCa
       <label className="field">
         <span>Descripción (opcional)</span>
         <textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+      </label>
+      <div className="field">
+        <span>Código de barras (opcional)</span>
+        <div className="coupon-row">
+          <input
+            value={f.barcode}
+            inputMode="numeric"
+            placeholder="Escanéalo o escríbelo"
+            onChange={(e) => setF({ ...f, barcode: e.target.value })}
+          />
+          <ScanButton onCode={(c) => setF((cur) => ({ ...cur, barcode: c }))} />
+        </div>
+      </div>
+      <label className="field">
+        <span>Código interno SKU (opcional)</span>
+        <input value={f.sku} maxLength={30} onChange={(e) => setF({ ...f, sku: e.target.value })} />
       </label>
       {canCats && (
         <div className="field">

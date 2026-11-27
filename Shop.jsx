@@ -7,6 +7,7 @@ import { VerifiedBadge } from './Verified.jsx'
 import { MyProfile } from './Profile.jsx'
 import { BottomNav, useGeoConsent } from './ui.jsx'
 import { CourierInfo } from './CourierInfo.jsx'
+import { ReserveScreen, MyReservations } from './Reservas.jsx'
 import { CustomerMenu } from './MenuView.jsx'
 import { logoPhoto, etaRange } from './media.js'
 import { HomeScreen, SurpriseScreen, ReviewSheet, SimilarBusinesses, loadVisibleBusinesses, distanceKm } from './Home.jsx'
@@ -169,7 +170,18 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
   const [cats, setCats] = useState([])
   const [catFilter, setCatFilter] = useState('todos')
   const [fav, setFav] = useState(false)
+  const [canReserve, setCanReserve] = useState(false)
+  const [reserving, setReserving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    supabase
+      .from('reservation_settings')
+      .select('enabled')
+      .eq('business_id', business.id)
+      .maybeSingle()
+      .then(({ data }) => setCanReserve(!!(data && data.enabled)))
+  }, [business.id])
 
   useEffect(() => {
     supabase
@@ -223,11 +235,18 @@ function BusinessMenu({ business, cart, setCart, onBack, onCheckout }) {
   const count = lines.reduce((s, l) => s + l.qty, 0)
   const subtotal = lines.reduce((s, l) => s + l.qty * Number(l.product.price), 0)
 
+  if (reserving) return <ReserveScreen business={business} onBack={() => setReserving(false)} />
+
   return (
     <>
       <button className="link" onClick={onBack}>
         <ArrowLeft size={18} /> Negocios
       </button>
+      {canReserve && (
+        <button className="btn secondary reserve-cta" onClick={() => setReserving(true)}>
+          Reservar mesa
+        </button>
+      )}
       <div className="greeting" style={{ marginBottom: 14 }}>
         <h2 style={{ fontSize: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
           {business.logo_path && <img className="menu-logo" src={logoPhoto(business.logo_path)} alt="" />}
@@ -830,6 +849,8 @@ function MyOrders({ notice, onOpenBusiness, onReorder }) {
           </div>
         </div>
       )}
+
+      <MyReservations />
 
       {orders === null && !error && <p>Cargando...</p>}
       {orders && orders.length === 0 && (

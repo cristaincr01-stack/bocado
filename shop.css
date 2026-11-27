@@ -2340,3 +2340,7 @@
   border-radius: 50%;
   object-fit: cover;
 }
+
+.reserve-cta {
+  margin-bottom: 12px;
+}

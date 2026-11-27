@@ -804,6 +804,7 @@ export function PricingAdmin() {
       ))}
 
       <SupportSetting />
+      <NewCustomerLimit />
 
       <h3 className="section-title">Métodos de pago</h3>
       <p className="hint">
@@ -887,6 +888,42 @@ function SupportSetting() {
       <button className="btn small" onClick={save}>
         Guardar ajustes
       </button>
+    </div>
+  )
+}
+
+
+function NewCustomerLimit() {
+  const [value, setValue] = useState('')
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'new_customer_max_total')
+      .maybeSingle()
+      .then(({ data }) => setValue(data?.value || ''))
+  }, [])
+
+  async function save() {
+    setMsg(null)
+    const n = value.trim() === '' ? '' : String(Math.max(0, Math.floor(Number(value))))
+    if (n === 'NaN') return setMsg({ type: 'error', text: 'Escribe un número válido.' })
+    const { error } = await supabase.rpc('admin_set_setting', { p_key: 'new_customer_max_total', p_value: n })
+    setMsg(error ? { type: 'error', text: 'No se pudo guardar.' } : { type: 'ok', text: 'Límite guardado.' })
+  }
+
+  return (
+    <div className="card">
+      <h3>Clientes nuevos</h3>
+      <label className="field">
+        <span>Valor máximo del pedido para quien aún no tiene pedidos entregados (CUP)</span>
+        <input type="number" inputMode="numeric" min="0" value={value} placeholder="Vacío = sin límite" onChange={(e) => setValue(e.target.value)} />
+      </label>
+      <p className="hint">Protege a los negocios de pedidos falsos grandes. Cuando el cliente tenga un pedido entregado, el límite desaparece. Además, un cliente nuevo no puede tener más de 2 pedidos sin completar a la vez.</p>
+      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+      <button className="btn small" onClick={save}>Guardar límite</button>
     </div>
   )
 }
